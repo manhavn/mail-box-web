@@ -1,12 +1,12 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import {
     decodePushIdTime,
     getMessage,
-    getMessageFrom,
-    getMessageRecipients,
-    listGroups,
-    listMessageIds,
     type EmailMessage,
+    type MessageSummary,
+    watchGroups,
+    watchMessageSummaries,
   } from './firebase'
 
   // oxlint-disable-next-line no-unassigned-vars
@@ -14,76 +14,82 @@
   // oxlint-disable-next-line no-unassigned-vars
   export let t: Record<string, string>
 
-  let groups: string[] = []
-  let groupMessageCounts: Record<string, number> = {}
+  let groups: Array<{ id: string; count: number }> = []
   let selectedGroup = ''
-  let messageIds: string[] = []
-  let messageSummaries: Record<string, Pick<EmailMessage, 'from' | 'recipients'>> = {}
+  let messageSummaries: MessageSummary[] = []
   let selectedMessageId = ''
   let selectedMessage: EmailMessage | null = null
   let loadingGroups = true
   let loadingMessages = false
   let loadingMessage = false
   let error = ''
+  let unwatchGroups: (() => void) | null = null
+  let unwatchMessages: (() => void) | null = null
 
-  $: void loadInitialGroups()
+  $: watchInitialGroups()
 
-  let hasLoadedInitialGroups = false
+  onDestroy(() => {
+    unwatchMessages?.()
+    unwatchGroups?.()
+  })
 
-  async function loadInitialGroups() {
-    if (hasLoadedInitialGroups) return
-    hasLoadedInitialGroups = true
-    await loadGroups()
-  }
-
-  async function loadGroups() {
+  function watchInitialGroups() {
+    if (unwatchGroups) return
     error = ''
     loadingGroups = true
 
     try {
-      groups = await listGroups()
-      groupMessageCounts = Object.fromEntries(
-        await Promise.all(
-          groups.map(async (group) => [group, (await listMessageIds(group)).length] as const),
-        ),
-      )
-      if (groups.length > 0) {
-        await selectGroup(groups[0])
-      }
+      unwatchGroups = watchGroups((nextGroups) => {
+        groups = nextGroups
+        loadingGroups = false
+
+        if (groups.length === 0) {
+          selectedGroup = ''
+          messageSummaries = []
+          unwatchMessages?.()
+          unwatchMessages = null
+          return
+        }
+
+        if (!selectedGroup || !groups.some((group) => group.id === selectedGroup)) {
+          selectGroup(groups[0].id)
+        }
+      })
     } catch (cause) {
       error = getErrorMessage(cause)
-    } finally {
       loadingGroups = false
     }
   }
 
-  async function selectGroup(group: string) {
+  function refreshGroups() {
+    unwatchGroups?.()
+    unwatchGroups = null
+    watchInitialGroups()
+  }
+
+  function selectGroup(group: string) {
     selectedGroup = group
     selectedMessageId = ''
     selectedMessage = null
-    messageIds = []
-    messageSummaries = {}
+    messageSummaries = []
     error = ''
     loadingMessages = true
+    unwatchMessages?.()
+    unwatchMessages = null
 
     try {
-      messageIds = await listMessageIds(group)
-      const summaries = await Promise.all(
-        messageIds.map(async (id) => {
-          const [from, recipients] = await Promise.all([
-            getMessageFrom(group, id),
-            getMessageRecipients(group, id),
-          ])
-          return [id, { from: from ?? undefined, recipients: recipients ?? undefined }] as const
-        }),
-      )
-      if (selectedGroup === group) {
-        messageSummaries = Object.fromEntries(summaries)
-      }
-      groupMessageCounts = { ...groupMessageCounts, [group]: messageIds.length }
+      unwatchMessages = watchMessageSummaries(group, (nextMessages) => {
+        if (selectedGroup !== group) return
+        messageSummaries = nextMessages
+        loadingMessages = false
+
+        if (selectedMessageId && !messageSummaries.some((message) => message.id === selectedMessageId)) {
+          selectedMessageId = ''
+          selectedMessage = null
+        }
+      })
     } catch (cause) {
       error = getErrorMessage(cause)
-    } finally {
       loadingMessages = false
     }
   }
@@ -117,7 +123,7 @@
   }
 
   function formatMessageTitle(id: string) {
-    const summary = messageSummaries[id]
+    const summary = messageSummaries.find((message) => message.id === id)
     return `${t.from}: ${summary?.from ?? t.unknownSender}\n${t.to}: ${formatRecipients(summary?.recipients)}`
   }
 </script>
@@ -130,7 +136,7 @@
   <aside class="panel groups-panel" aria-label="Chat groups">
     <div class="panel-heading">
       <h2>{t.chatGroups}</h2>
-      <button type="button" on:click={loadGroups} disabled={loadingGroups}>{t.refresh}</button>
+        <button type="button" on:click={refreshGroups} disabled={loadingGroups}>{t.refresh}</button>
     </div>
 
     {#if loadingGroups}
@@ -142,11 +148,11 @@
         {#each groups as group}
           <button
             type="button"
-            class:active={group === selectedGroup}
-            on:click={() => selectGroup(group)}
+            class:active={group.id === selectedGroup}
+            on:click={() => selectGroup(group.id)}
           >
-            <span class="group-name">{group}</span>
-            <span class="group-count">{groupMessageCounts[group] ?? 0} {t.groupCount}</span>
+            <span class="group-name">{group.id}</span>
+            <span class="group-count">{group.count} {t.groupCount}</span>
           </button>
         {/each}
       </div>
@@ -165,24 +171,24 @@
       <p class="muted">{t.loadingMessages}</p>
     {:else if !selectedGroup}
       <p class="muted">{t.chooseGroup}</p>
-    {:else if messageIds.length === 0}
+    {:else if messageSummaries.length === 0}
       <p class="muted">{t.noMessages}</p>
     {:else}
       <div class="message-list">
-        {#each messageIds as id}
+        {#each messageSummaries as message}
           <button
             type="button"
-            class:active={id === selectedMessageId}
-            title={formatMessageTitle(id)}
-            on:click={() => selectMessage(id)}
+            class:active={message.id === selectedMessageId}
+            title={formatMessageTitle(message.id)}
+            on:click={() => selectMessage(message.id)}
           >
             <span class="message-main">
-              <span class="message-id">{id}</span>
-              <span class="message-time">{formatPushTime(id)}</span>
+              <span class="message-id">{message.id}</span>
+              <span class="message-time">{message.received_at ? new Date(message.received_at).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US') : formatPushTime(message.id)}</span>
             </span>
             <span class="message-addresses">
-              <span class="message-from">{t.from}: {messageSummaries[id]?.from ?? t.unknownSender}</span>
-              <span class="message-recipients">{t.to}: {formatRecipients(messageSummaries[id]?.recipients)}</span>
+              <span class="message-from">{t.from}: {message.from ?? t.unknownSender}</span>
+              <span class="message-recipients">{t.to}: {formatRecipients(message.recipients)}</span>
             </span>
           </button>
         {/each}

@@ -23,6 +23,7 @@ const app = initializeApp(firebaseConfig)
 const provider = new GoogleAuthProvider()
 
 export const auth = getAuth(app)
+export { app }
 
 export type AuthUser = User
 

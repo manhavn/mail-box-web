@@ -2,17 +2,17 @@
 
 Mailbox Web là app Svelte 5 + TypeScript + Vite dùng để đọc email được Rust `mail-box` SMTP receiver lưu vào Firebase Realtime Database.
 
-App xem mỗi path cấp cao nhất trong Firebase Realtime Database là một nhóm tin nhắn. Mỗi nhóm chứa các child push id của Firebase, và mỗi child là một payload email đã nhận.
+App xem mỗi key dưới `messageGroups` là một nhóm tin nhắn. Dữ liệu nhẹ cho danh sách lấy từ `messageSummaries`, còn payload email đầy đủ chỉ tải từ `messages` sau khi chọn một tin.
 
 Tài liệu tiếng Anh: [README.md](./README.md)
 
 ## Tính Năng
 
 - Đăng nhập Google bằng Firebase Authentication.
-- Đọc Realtime Database REST bằng Firebase ID token.
-- Các nhóm tin nhắn được lấy từ top-level paths của database.
+- List/detail của Realtime Database dùng Firebase SDK listeners; database rules đang public read để Rust cleanup task có thể quét records.
+- Các nhóm tin nhắn được cập nhật realtime từ metadata `messageGroups`.
 - Hiển thị số lượng tin trong mỗi nhóm.
-- Danh sách tin hiển thị push id, thời gian nhận, người gửi và người nhận.
+- Danh sách tin được cập nhật realtime từ dữ liệu nhẹ `messageSummaries`.
 - URL database và địa chỉ email dài có thể xem đầy đủ bằng hover title.
 - Danh sách tin không tải `data` và `transcript`; chỉ khi chọn một tin mới tải payload đầy đủ.
 - Nội dung tin đầy đủ được hiển thị theo các text box.
@@ -23,15 +23,17 @@ Tài liệu tiếng Anh: [README.md](./README.md)
 
 ## Cấu Trúc Database Mong Đợi
 
-Rust `mail-box` ghi dữ liệu vào:
+Rust `mail-box` ghi dữ liệu vào ba vùng trong Realtime Database:
 
 ```text
-{firebase-url}/{firebase-path}.json
+messageGroups/{firebase-path}
+messageSummaries/{firebase-path}/{message-id}
+messages/{firebase-path}/{message-id}
 ```
 
-Mỗi `firebase-path` sẽ hiển thị trong app như một nhóm tin nhắn. Firebase tạo push-id child khi Rust app gửi request `POST`.
+Mỗi `firebase-path` sẽ hiển thị trong app như một nhóm tin nhắn. Payload đầy đủ nằm dưới `messages`, còn list view dùng `messageSummaries` nên không tải `data` hoặc `transcript`.
 
-Payload mẫu:
+Payload đầy đủ mẫu dưới `messages/{firebase-path}/{message-id}`:
 
 ```json
 {
@@ -41,6 +43,26 @@ Payload mẫu:
   "data": "From: <sender@example.com>\nTo: <receiver@example.com>\nSubject: test\n\nHello\n",
   "transcript": "S: 220 mail-box ready\r\nC: EHLO localhost\r\n...",
   "received_at": "2026-07-08T12:00:00Z"
+}
+```
+
+Summary mẫu dưới `messageSummaries/{firebase-path}/{message-id}`:
+
+```json
+{
+  "from": "sender@example.com",
+  "recipients": ["receiver@example.com"],
+  "received_at": "2026-07-08T12:00:00Z"
+}
+```
+
+Metadata nhóm mẫu dưới `messageGroups/{firebase-path}`:
+
+```json
+{
+  "count": 12,
+  "last_message_id": "-OExamplePushId",
+  "updated_at": "2026-07-08T12:00:00Z"
 }
 ```
 
@@ -88,13 +110,13 @@ Project này có sẵn `database.rules.json`:
 ```json
 {
   "rules": {
-    ".read": "auth != null",
+    ".read": true,
     ".write": true
   }
 }
 ```
 
-`read` yêu cầu user đã đăng nhập Firebase. `write` đang public để Rust SMTP receiver vẫn có thể post message bằng URL. Nếu bạn khóa `.write`, hãy đảm bảo service ghi dữ liệu có Firebase Auth token hợp lệ hoặc dùng chiến lược ghi server-side khác.
+`read` đang public để Rust SMTP receiver có thể quét records cũ khi cleanup. `write` đang public để Rust SMTP receiver vẫn có thể post message bằng URL. Nếu bạn khóa một trong hai rule, hãy đảm bảo Rust process có Firebase Auth token hợp lệ hoặc dùng chiến lược truy cập server-side khác.
 
 ### 4. Thiết Lập Firebase Hosting
 

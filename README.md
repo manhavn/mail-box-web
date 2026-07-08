@@ -2,17 +2,17 @@
 
 Mailbox Web is a Svelte 5 + TypeScript + Vite web app for reading email messages stored by the Rust `mail-box` SMTP receiver in Firebase Realtime Database.
 
-The app treats each top-level Firebase Realtime Database path as a message group. Each group contains Firebase push-id children, and each child is one received email payload.
+The app treats each key under `messageGroups` as a message group. Lightweight list data comes from `messageSummaries`, while full email payloads are loaded from `messages` only after selecting one message.
 
 Vietnamese documentation: [README.vi.md](./README.vi.md)
 
 ## Features
 
 - Google sign-in with Firebase Authentication.
-- Realtime Database REST reads protected by Firebase ID tokens.
-- Message groups are read from top-level database paths.
+- Realtime Database list/detail reads use Firebase SDK listeners; database rules are public read so the Rust cleanup task can scan records.
+- Message groups are updated in realtime from `messageGroups` metadata.
 - Message count is shown for each group.
-- Message list shows push id, received time, sender, and recipients.
+- Message list is updated in realtime from lightweight `messageSummaries` data.
 - Long database URLs and message addresses are available through hover titles.
 - Message list avoids loading `data` and `transcript`; full payload is loaded only after selecting one message.
 - Full message detail is displayed as text boxes.
@@ -23,15 +23,17 @@ Vietnamese documentation: [README.vi.md](./README.vi.md)
 
 ## Expected Database Shape
 
-The Rust `mail-box` app writes to:
+The Rust `mail-box` app writes to three Realtime Database areas:
 
 ```text
-{firebase-url}/{firebase-path}.json
+messageGroups/{firebase-path}
+messageSummaries/{firebase-path}/{message-id}
+messages/{firebase-path}/{message-id}
 ```
 
-Each `firebase-path` is displayed as a message group. Firebase creates push-id children when the Rust app sends `POST` requests.
+Each `firebase-path` is displayed as a message group. The full payload lives under `messages`, and the list view uses `messageSummaries` so it does not download `data` or `transcript`.
 
-Example payload:
+Example full payload under `messages/{firebase-path}/{message-id}`:
 
 ```json
 {
@@ -41,6 +43,26 @@ Example payload:
   "data": "From: <sender@example.com>\nTo: <receiver@example.com>\nSubject: test\n\nHello\n",
   "transcript": "S: 220 mail-box ready\r\nC: EHLO localhost\r\n...",
   "received_at": "2026-07-08T12:00:00Z"
+}
+```
+
+Example summary under `messageSummaries/{firebase-path}/{message-id}`:
+
+```json
+{
+  "from": "sender@example.com",
+  "recipients": ["receiver@example.com"],
+  "received_at": "2026-07-08T12:00:00Z"
+}
+```
+
+Example group metadata under `messageGroups/{firebase-path}`:
+
+```json
+{
+  "count": 12,
+  "last_message_id": "-OExamplePushId",
+  "updated_at": "2026-07-08T12:00:00Z"
 }
 ```
 
@@ -88,13 +110,13 @@ This project includes `database.rules.json`:
 ```json
 {
   "rules": {
-    ".read": "auth != null",
+    ".read": true,
     ".write": true
   }
 }
 ```
 
-`read` requires a signed-in Firebase user. `write` is public so the Rust SMTP receiver can keep posting messages by URL. If you lock `.write` down, make sure the writer has a valid Firebase Auth token or another server-side write strategy.
+`read` is public so the Rust SMTP receiver can scan old records during cleanup. `write` is public so the Rust SMTP receiver can keep posting messages by URL. If you lock either rule down, make sure the Rust process has a valid Firebase Auth token or another server-side access strategy.
 
 ### 4. Set Up Firebase Hosting
 

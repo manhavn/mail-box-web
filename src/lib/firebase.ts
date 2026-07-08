@@ -1,4 +1,6 @@
 import { getAuthToken } from './firebase-app'
+import { getDatabase, get, onValue, ref, type Unsubscribe } from 'firebase/database'
+import { app } from './firebase-app'
 
 const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz'
 
@@ -13,7 +15,22 @@ export type EmailMessage = {
   [key: string]: unknown
 }
 
+export type MessageGroup = {
+  id: string
+  count: number
+  last_message_id?: string
+  updated_at?: string
+}
+
+export type MessageSummary = {
+  id: string
+  from?: string
+  recipients?: string[]
+  received_at?: string
+}
+
 const databaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL as string | undefined
+const database = getDatabase(app)
 
 export function getDatabaseUrl() {
   return databaseUrl?.trim().replace(/\/+$/, '') ?? ''
@@ -33,26 +50,64 @@ export function decodePushIdTime(id: string) {
 }
 
 export async function listGroups() {
-  const groups = await request<Record<string, true> | null>('', { shallow: 'true' })
+  const groups = await request<Record<string, true> | null>('messageGroups', { shallow: 'true' })
   return Object.keys(groups ?? {}).sort((a, b) => a.localeCompare(b))
 }
 
 export async function listMessageIds(group: string) {
-  const messages = await request<Record<string, true> | null>(group, { shallow: 'true' })
+  const messages = await request<Record<string, true> | null>(`messageSummaries/${group}`, {
+    shallow: 'true',
+  })
   return Object.keys(messages ?? {}).sort((a, b) => b.localeCompare(a))
 }
 
 export async function getMessage(group: string, id: string): Promise<EmailMessage | null> {
-  const message = await request<Omit<EmailMessage, 'id'> | null>(`${group}/${id}`)
+  const snapshot = await get(ref(database, `messages/${group}/${id}`))
+  const message = snapshot.val() as Omit<EmailMessage, 'id'> | null
   return message ? { id, ...message } : null
 }
 
 export async function getMessageRecipients(group: string, id: string) {
-  return request<string[] | null>(`${group}/${id}/recipients`)
+  return request<string[] | null>(`messageSummaries/${group}/${id}/recipients`)
 }
 
 export async function getMessageFrom(group: string, id: string) {
-  return request<string | null>(`${group}/${id}/from`)
+  return request<string | null>(`messageSummaries/${group}/${id}/from`)
+}
+
+export function watchGroups(callback: (groups: MessageGroup[]) => void): Unsubscribe {
+  return onValue(ref(database, 'messageGroups'), (snapshot) => {
+    const value = snapshot.val() as Record<string, Omit<MessageGroup, 'id'>> | null
+    const groups = Object.entries(value ?? {})
+      .map(([id, group]) => ({
+        id,
+        count: Number(group?.count ?? 0),
+        last_message_id: group?.last_message_id,
+        updated_at: group?.updated_at,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+
+    callback(groups)
+  })
+}
+
+export function watchMessageSummaries(
+  group: string,
+  callback: (messages: MessageSummary[]) => void,
+): Unsubscribe {
+  return onValue(ref(database, `messageSummaries/${group}`), (snapshot) => {
+    const value = snapshot.val() as Record<string, Omit<MessageSummary, 'id'>> | null
+    const messages = Object.entries(value ?? {})
+      .map(([id, message]) => ({
+        id,
+        from: message?.from,
+        recipients: message?.recipients,
+        received_at: message?.received_at,
+      }))
+      .sort((a, b) => b.id.localeCompare(a.id))
+
+    callback(messages)
+  })
 }
 
 async function request<T>(path: string, params: Record<string, string> = {}) {
