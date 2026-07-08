@@ -30,6 +30,9 @@
   let parsedEmailHtml = ''
   let parsedEmailText = ''
   let parsedEmailError = ''
+  let otpCode = ''
+  let otpCopied = false
+  let otpCopiedTimeout: ReturnType<typeof setTimeout> | null = null
   let error = ''
   let unwatchGroups: (() => void) | null = null
   let unwatchMessages: (() => void) | null = null
@@ -39,6 +42,7 @@
   onDestroy(() => {
     unwatchMessages?.()
     unwatchGroups?.()
+    if (otpCopiedTimeout) clearTimeout(otpCopiedTimeout)
   })
 
   function watchInitialGroups() {
@@ -133,6 +137,24 @@
     parsedEmailHtml = ''
     parsedEmailText = ''
     parsedEmailError = ''
+    otpCode = ''
+    otpCopied = false
+    if (otpCopiedTimeout) {
+      clearTimeout(otpCopiedTimeout)
+      otpCopiedTimeout = null
+    }
+  }
+
+  async function copyOtpCode() {
+    if (!otpCode) return
+    await navigator.clipboard.writeText(otpCode)
+    otpCopied = true
+
+    if (otpCopiedTimeout) clearTimeout(otpCopiedTimeout)
+    otpCopiedTimeout = setTimeout(() => {
+      otpCopied = false
+      otpCopiedTimeout = null
+    }, 1600)
   }
 
   async function parseSelectedMessageData() {
@@ -146,11 +168,46 @@
       const parsed = await new PostalMime().parse(data)
       parsedEmailHtml = parsed.html ? DOMPurify.sanitize(parsed.html) : ''
       parsedEmailText = parsed.text ?? ''
+      otpCode = extractOtpCode([parsed.subject, parsedEmailText, stripHtml(parsedEmailHtml), data])
     } catch (cause) {
       parsedEmailError = getErrorMessage(cause)
+      otpCode = extractOtpCode([data])
     } finally {
       loadingParsedEmail = false
     }
+  }
+
+  function stripHtml(html: string) {
+    if (!html) return ''
+    const element = document.createElement('div')
+    element.innerHTML = html
+    return element.textContent ?? ''
+  }
+
+  function extractOtpCode(values: Array<string | undefined>) {
+    const text = values.filter(Boolean).join('\n')
+    if (!text.trim()) return ''
+
+    const candidates = new Map<string, number>()
+    const patterns = [
+      /(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)[^\dA-Z]{0,40}([A-Z0-9]{4,10})/giu,
+      /([A-Z0-9]{4,10})[^\dA-Z]{0,40}(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)/giu,
+      /\b(\d{4,8})\b/g,
+    ]
+
+    for (const [index, pattern] of patterns.entries()) {
+      for (const match of text.matchAll(pattern)) {
+        const candidate = match[1]?.replace(/\s+/g, '')
+        if (!candidate || !/[0-9]/.test(candidate)) continue
+        if (/^(19|20)\d{2}$/.test(candidate)) continue
+
+        const keywordScore = index < 2 ? 100 : 0
+        const lengthScore = candidate.length === 6 ? 20 : candidate.length >= 4 && candidate.length <= 8 ? 10 : 0
+        candidates.set(candidate, Math.max(candidates.get(candidate) ?? 0, keywordScore + lengthScore))
+      }
+    }
+
+    return [...candidates.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] ?? ''
   }
 
   function formatPushTime(id: string) {
@@ -268,6 +325,17 @@
         <article class="text-box small">
           <h3>{t.peerAddress}</h3>
           <pre>{selectedMessage.peer_addr ?? t.unknownPeer}</pre>
+        </article>
+        <article class="text-box small otp-box">
+          <div class="text-box-heading">
+            <h3>{t.otpCode}</h3>
+            {#if otpCode}
+              <a href="#copy-otp" on:click|preventDefault={copyOtpCode}>
+                {otpCopied ? t.copied : t.copy}
+              </a>
+            {/if}
+          </div>
+          <pre class:empty-otp={!otpCode}>{otpCode || t.noOtp}</pre>
         </article>
         <article class="text-box wide rendered-email-box">
           <div class="text-box-heading">

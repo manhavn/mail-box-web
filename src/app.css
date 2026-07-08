@@ -422,6 +422,20 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.otp-box pre {
+  color: var(--accent-strong);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.otp-box pre.empty-otp {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 .text-box-heading {
   display: flex;
   align-items: center;
@@ -446,24 +460,24 @@ h3 {
 }
 
 .rendered-email-box {
-  background: rgba(240, 247, 255, 0.96);
-  color: #172033;
+  background: rgba(8, 17, 31, 0.68);
+  color: var(--text);
 }
 
 .rendered-email-box h3 {
-  color: #1d4ed8;
+  color: var(--accent-strong);
 }
 
 .parsed-email-status {
   margin-top: 10px;
-  color: #475569;
+  color: var(--muted);
 }
 
 .email-html-preview {
   overflow: auto;
   margin-top: 12px;
   max-height: 520px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 1px solid var(--line);
   border-radius: 14px;
   background: #ffffff;
   color: #172033;
@@ -479,10 +493,10 @@ h3 {
 }
 
 .email-text-preview {
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #ffffff;
-  color: #172033;
+  background: rgba(8, 17, 31, 0.68);
+  color: #e5eefb;
   padding: 16px;
 }
 
