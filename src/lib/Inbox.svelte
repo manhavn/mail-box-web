@@ -30,9 +30,12 @@
   let parsedEmailHtml = ''
   let parsedEmailText = ''
   let parsedEmailError = ''
+  let renderedEmailFullscreen = false
   let otpCode = ''
   let otpCopied = false
+  let copiedField = ''
   let otpCopiedTimeout: ReturnType<typeof setTimeout> | null = null
+  let copiedFieldTimeout: ReturnType<typeof setTimeout> | null = null
   let error = ''
   let unwatchGroups: (() => void) | null = null
   let unwatchMessages: (() => void) | null = null
@@ -43,6 +46,7 @@
     unwatchMessages?.()
     unwatchGroups?.()
     if (otpCopiedTimeout) clearTimeout(otpCopiedTimeout)
+    if (copiedFieldTimeout) clearTimeout(copiedFieldTimeout)
   })
 
   function watchInitialGroups() {
@@ -137,11 +141,17 @@
     parsedEmailHtml = ''
     parsedEmailText = ''
     parsedEmailError = ''
+    renderedEmailFullscreen = false
     otpCode = ''
     otpCopied = false
+    copiedField = ''
     if (otpCopiedTimeout) {
       clearTimeout(otpCopiedTimeout)
       otpCopiedTimeout = null
+    }
+    if (copiedFieldTimeout) {
+      clearTimeout(copiedFieldTimeout)
+      copiedFieldTimeout = null
     }
   }
 
@@ -154,6 +164,18 @@
     otpCopiedTimeout = setTimeout(() => {
       otpCopied = false
       otpCopiedTimeout = null
+    }, 1600)
+  }
+
+  async function copyTextBox(field: string, value: string) {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    copiedField = field
+
+    if (copiedFieldTimeout) clearTimeout(copiedFieldTimeout)
+    copiedFieldTimeout = setTimeout(() => {
+      copiedField = ''
+      copiedFieldTimeout = null
     }, 1600)
   }
 
@@ -239,7 +261,67 @@
     const summary = messageSummaries.find((message) => message.id === id)
     return `${t.from}: ${summary?.from ?? t.unknownSender}\n${t.to}: ${formatRecipients(summary?.recipients)}`
   }
+
+  function getRenderedEmailDocument() {
+    const body = parsedEmailHtml || `<pre>${escapeHtml(parsedEmailText)}</pre>`
+
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #fff; color: #172033; }
+      body { box-sizing: border-box; padding: 24px; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      img, table, iframe { max-width: 100%; }
+      img { height: auto; }
+      pre { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    </style>
+  </head>
+  <body>${body}</body>
+</html>`
+  }
+
+  function downloadRenderedEmailHtml() {
+    const document = getRenderedEmailDocument()
+    const blob = new Blob([document], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = window.document.createElement('a')
+    link.href = url
+    link.download = getRenderedEmailFileName()
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function getRenderedEmailFileName() {
+    const from = selectedMessage?.from ?? 'unknown-sender'
+    const to = formatRecipients(selectedMessage?.recipients)
+    const receivedAt = selectedMessage?.received_at ?? formatPushTime(selectedMessage?.id ?? '')
+
+    return `${sanitizeFilePart(from)}-${sanitizeFilePart(to)}-${sanitizeFilePart(receivedAt)}.html`
+  }
+
+  function sanitizeFilePart(value: string) {
+    return (
+      value
+        .trim()
+        .replace(/[^A-Za-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'unknown'
+    )
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
 </script>
+
+<svelte:window on:keydown={(event) => event.key === 'Escape' && (renderedEmailFullscreen = false)} />
 
 {#if error}
   <section class="alert">{error}</section>
@@ -323,23 +405,55 @@
     {:else}
       <div class="detail-grid">
         <article class="text-box small">
-          <h3>ID</h3>
+          <div class="text-box-heading">
+            <h3>ID</h3>
+            <a href="#copy-id" on:click|preventDefault={() => copyTextBox('id', selectedMessage?.id ?? '')}>
+              {copiedField === 'id' ? t.copied : t.copy}
+            </a>
+          </div>
           <pre>{selectedMessage.id}</pre>
         </article>
         <article class="text-box small">
-          <h3>{t.receivedAt}</h3>
+          <div class="text-box-heading">
+            <h3>{t.receivedAt}</h3>
+            <a
+              href="#copy-received-at"
+              on:click|preventDefault={() =>
+                copyTextBox('receivedAt', selectedMessage?.received_at ?? formatPushTime(selectedMessage?.id ?? ''))}
+            >
+              {copiedField === 'receivedAt' ? t.copied : t.copy}
+            </a>
+          </div>
           <pre>{selectedMessage.received_at ?? formatPushTime(selectedMessage.id)}</pre>
         </article>
         <article class="text-box small">
-          <h3>{t.from}</h3>
+          <div class="text-box-heading">
+            <h3>{t.from}</h3>
+            <a href="#copy-from" on:click|preventDefault={() => copyTextBox('from', selectedMessage?.from ?? t.unknownSender)}>
+              {copiedField === 'from' ? t.copied : t.copy}
+            </a>
+          </div>
           <pre>{selectedMessage.from ?? t.unknownSender}</pre>
         </article>
         <article class="text-box small">
-          <h3>{t.to}</h3>
+          <div class="text-box-heading">
+            <h3>{t.to}</h3>
+            <a href="#copy-to" on:click|preventDefault={() => copyTextBox('to', formatRecipients(selectedMessage?.recipients))}>
+              {copiedField === 'to' ? t.copied : t.copy}
+            </a>
+          </div>
           <pre>{formatRecipients(selectedMessage.recipients)}</pre>
         </article>
         <article class="text-box small">
-          <h3>{t.peerAddress}</h3>
+          <div class="text-box-heading">
+            <h3>{t.peerAddress}</h3>
+            <a
+              href="#copy-peer-address"
+              on:click|preventDefault={() => copyTextBox('peerAddress', selectedMessage?.peer_addr ?? t.unknownPeer)}
+            >
+              {copiedField === 'peerAddress' ? t.copied : t.copy}
+            </a>
+          </div>
           <pre>{selectedMessage.peer_addr ?? t.unknownPeer}</pre>
         </article>
         <article class="text-box small otp-box">
@@ -355,35 +469,40 @@
         </article>
         <article class="text-box wide rendered-email-box">
           <div class="text-box-heading">
-            <h3>Rendered email</h3>
+            <h3>{t.renderedEmail}</h3>
+            {#if parsedEmailHtml || parsedEmailText}
+              <a href="#fullscreen-email" on:click|preventDefault={() => (renderedEmailFullscreen = true)}>
+                {t.renderedEmailFullScreen}
+              </a>
+            {/if}
           </div>
 
           {#if loadingParsedEmail}
-            <p class="muted parsed-email-status">Parsing MIME message...</p>
+            <p class="muted parsed-email-status">{t.parsingMime}</p>
           {:else if parsedEmailError}
-            <p class="muted parsed-email-status">Could not parse MIME message: {parsedEmailError}</p>
+            <p class="muted parsed-email-status">{t.renderParseFailed}: {parsedEmailError}</p>
           {:else if parsedEmailHtml}
             <div class="email-html-preview">{@html parsedEmailHtml}</div>
           {:else if parsedEmailText}
             <pre class="email-text-preview">{parsedEmailText}</pre>
           {:else}
-            <p class="muted parsed-email-status">No rendered content found in this message.</p>
+            <p class="muted parsed-email-status">{t.noRenderedContent}</p>
           {/if}
         </article>
         <article class="text-box wide">
           <div class="text-box-heading">
-            <h3>Data</h3>
+            <h3>{t.data}</h3>
             <a href="#data" on:click|preventDefault={() => (dataExpanded = !dataExpanded)}>
-              {dataExpanded ? 'Collapse' : 'Expand'}
+              {dataExpanded ? t.collapse : t.expand}
             </a>
           </div>
           <pre class:collapsed-preview={!dataExpanded}>{selectedMessage.data ?? ''}</pre>
         </article>
         <article class="text-box wide">
           <div class="text-box-heading">
-            <h3>Transcript</h3>
+            <h3>{t.transcript}</h3>
             <a href="#transcript" on:click|preventDefault={() => (transcriptExpanded = !transcriptExpanded)}>
-              {transcriptExpanded ? 'Collapse' : 'Expand'}
+              {transcriptExpanded ? t.collapse : t.expand}
             </a>
           </div>
           <pre class:collapsed-preview={!transcriptExpanded}>{selectedMessage.transcript ?? ''}</pre>
@@ -392,3 +511,23 @@
     {/if}
   </section>
 </section>
+
+{#if renderedEmailFullscreen}
+  <div class="email-fullscreen-backdrop" role="presentation">
+    <div class="email-fullscreen-dialog" role="dialog" aria-modal="true" aria-label={t.renderedEmailFullScreen}>
+      <header class="email-fullscreen-header">
+        <h2>{t.renderedEmail}</h2>
+        <div class="email-fullscreen-actions">
+          <a href="#download-email" on:click|preventDefault={downloadRenderedEmailHtml}>{t.downloadHtml}</a>
+          <a href="#close-email" on:click|preventDefault={() => (renderedEmailFullscreen = false)}>{t.close}</a>
+        </div>
+      </header>
+      <iframe
+        class="email-fullscreen-frame"
+        title={t.renderedEmailFullScreen}
+        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        srcdoc={getRenderedEmailDocument()}
+      ></iframe>
+    </div>
+  </div>
+{/if}
