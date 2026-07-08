@@ -1,4 +1,6 @@
 <script lang="ts">
+  import DOMPurify from 'dompurify'
+  import PostalMime from 'postal-mime'
   import { onDestroy } from 'svelte'
   import {
     decodePushIdTime,
@@ -22,8 +24,12 @@
   let loadingGroups = true
   let loadingMessages = false
   let loadingMessage = false
+  let loadingParsedEmail = false
   let dataExpanded = false
   let transcriptExpanded = false
+  let parsedEmailHtml = ''
+  let parsedEmailText = ''
+  let parsedEmailError = ''
   let error = ''
   let unwatchGroups: (() => void) | null = null
   let unwatchMessages: (() => void) | null = null
@@ -73,6 +79,7 @@
     selectedGroup = group
     selectedMessageId = ''
     selectedMessage = null
+    resetParsedEmail()
     dataExpanded = false
     transcriptExpanded = false
     messageSummaries = []
@@ -103,11 +110,13 @@
     selectedMessage = null
     dataExpanded = false
     transcriptExpanded = false
+    resetParsedEmail()
     error = ''
     loadingMessage = true
 
     try {
       selectedMessage = await getMessage(selectedGroup, id)
+      await parseSelectedMessageData()
     } catch (cause) {
       error = getErrorMessage(cause)
     } finally {
@@ -117,6 +126,31 @@
 
   function getErrorMessage(cause: unknown) {
     return cause instanceof Error ? cause.message : String(cause)
+  }
+
+  function resetParsedEmail() {
+    loadingParsedEmail = false
+    parsedEmailHtml = ''
+    parsedEmailText = ''
+    parsedEmailError = ''
+  }
+
+  async function parseSelectedMessageData() {
+    const data = selectedMessage?.data
+    if (!data?.trim()) return
+
+    loadingParsedEmail = true
+    parsedEmailError = ''
+
+    try {
+      const parsed = await new PostalMime().parse(data)
+      parsedEmailHtml = parsed.html ? DOMPurify.sanitize(parsed.html) : ''
+      parsedEmailText = parsed.text ?? ''
+    } catch (cause) {
+      parsedEmailError = getErrorMessage(cause)
+    } finally {
+      loadingParsedEmail = false
+    }
   }
 
   function formatPushTime(id: string) {
@@ -234,6 +268,23 @@
         <article class="text-box small">
           <h3>{t.peerAddress}</h3>
           <pre>{selectedMessage.peer_addr ?? t.unknownPeer}</pre>
+        </article>
+        <article class="text-box wide rendered-email-box">
+          <div class="text-box-heading">
+            <h3>Rendered email</h3>
+          </div>
+
+          {#if loadingParsedEmail}
+            <p class="muted parsed-email-status">Parsing MIME message...</p>
+          {:else if parsedEmailError}
+            <p class="muted parsed-email-status">Could not parse MIME message: {parsedEmailError}</p>
+          {:else if parsedEmailHtml}
+            <div class="email-html-preview">{@html parsedEmailHtml}</div>
+          {:else if parsedEmailText}
+            <pre class="email-text-preview">{parsedEmailText}</pre>
+          {:else}
+            <p class="muted parsed-email-status">No rendered content found in this message.</p>
+          {/if}
         </article>
         <article class="text-box wide">
           <div class="text-box-heading">
