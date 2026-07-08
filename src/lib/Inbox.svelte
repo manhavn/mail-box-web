@@ -168,7 +168,8 @@
       const parsed = await new PostalMime().parse(data)
       parsedEmailHtml = parsed.html ? DOMPurify.sanitize(parsed.html) : ''
       parsedEmailText = parsed.text ?? ''
-      otpCode = extractOtpCode([parsed.subject, parsedEmailText, stripHtml(parsedEmailHtml), data])
+      const renderedText = stripHtml(parsedEmailHtml)
+      otpCode = extractOtpCode([renderedText, parsedEmailText, parsed.subject])
     } catch (cause) {
       parsedEmailError = getErrorMessage(cause)
       otpCode = extractOtpCode([data])
@@ -185,25 +186,40 @@
   }
 
   function extractOtpCode(values: Array<string | undefined>) {
-    const text = values.filter(Boolean).join('\n')
+    const text = values
+      .filter(Boolean)
+      .join('\n')
+      .replace(/\u00a0/g, ' ')
     if (!text.trim()) return ''
 
     const candidates = new Map<string, number>()
     const patterns = [
-      /(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)[^\dA-Z]{0,40}([A-Z0-9]{4,10})/giu,
-      /([A-Z0-9]{4,10})[^\dA-Z]{0,40}(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)/giu,
-      /\b(\d{4,8})\b/g,
+      {
+        regex:
+          /(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)[\s\S]{0,80}?([A-Z0-9][A-Z0-9\s-]{2,18}[A-Z0-9])/giu,
+        score: 120,
+      },
+      {
+        regex:
+          /([A-Z0-9][A-Z0-9\s-]{2,18}[A-Z0-9])[\s\S]{0,80}?(?:otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|code|mã|ma|xac\s*thuc|xác\s*thực)/giu,
+        score: 90,
+      },
+      { regex: /\b(\d{4,8})\b/g, score: 10 },
     ]
 
-    for (const [index, pattern] of patterns.entries()) {
-      for (const match of text.matchAll(pattern)) {
-        const candidate = match[1]?.replace(/\s+/g, '')
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(pattern.regex)) {
+        const candidate = match[1]?.replace(/[\s-]+/g, '')
         if (!candidate || !/[0-9]/.test(candidate)) continue
         if (/^(19|20)\d{2}$/.test(candidate)) continue
+        if (candidate.length < 4 || candidate.length > 10) continue
 
-        const keywordScore = index < 2 ? 100 : 0
         const lengthScore = candidate.length === 6 ? 20 : candidate.length >= 4 && candidate.length <= 8 ? 10 : 0
-        candidates.set(candidate, Math.max(candidates.get(candidate) ?? 0, keywordScore + lengthScore))
+        const numericScore = /^\d+$/.test(candidate) ? 12 : 0
+        candidates.set(
+          candidate,
+          Math.max(candidates.get(candidate) ?? 0, pattern.score + lengthScore + numericScore),
+        )
       }
     }
 
