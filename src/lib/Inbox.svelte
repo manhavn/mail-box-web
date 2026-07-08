@@ -22,6 +22,8 @@
   let loadingGroups = true
   let loadingMessages = false
   let loadingMessage = false
+  let dataExpanded = false
+  let transcriptExpanded = false
   let error = ''
   let unwatchGroups: (() => void) | null = null
   let unwatchMessages: (() => void) | null = null
@@ -71,6 +73,8 @@
     selectedGroup = group
     selectedMessageId = ''
     selectedMessage = null
+    dataExpanded = false
+    transcriptExpanded = false
     messageSummaries = []
     error = ''
     loadingMessages = true
@@ -97,6 +101,8 @@
   async function selectMessage(id: string) {
     selectedMessageId = id
     selectedMessage = null
+    dataExpanded = false
+    transcriptExpanded = false
     error = ''
     loadingMessage = true
 
@@ -230,12 +236,22 @@
           <pre>{selectedMessage.peer_addr ?? t.unknownPeer}</pre>
         </article>
         <article class="text-box wide">
-          <h3>Data</h3>
-          <pre>{selectedMessage.data ?? ''}</pre>
+          <div class="text-box-heading">
+            <h3>Data</h3>
+            <a href="#data" on:click|preventDefault={() => (dataExpanded = !dataExpanded)}>
+              {dataExpanded ? 'Collapse' : 'Expand'}
+            </a>
+          </div>
+          <pre class:collapsed-preview={!dataExpanded}>{selectedMessage.data ?? ''}</pre>
         </article>
         <article class="text-box wide">
-          <h3>Transcript</h3>
-          <pre>{selectedMessage.transcript ?? ''}</pre>
+          <div class="text-box-heading">
+            <h3>Transcript</h3>
+            <a href="#transcript" on:click|preventDefault={() => (transcriptExpanded = !transcriptExpanded)}>
+              {transcriptExpanded ? 'Collapse' : 'Expand'}
+            </a>
+          </div>
+          <pre class:collapsed-preview={!transcriptExpanded}>{selectedMessage.transcript ?? ''}</pre>
         </article>
       </div>
     {/if}

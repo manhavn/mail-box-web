@@ -422,6 +422,29 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.text-box-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.text-box-heading a {
+  flex: 0 0 auto;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  text-decoration: none;
+}
+
+.text-box-heading a:hover {
+  background: rgba(37, 99, 235, 0.24);
+  color: var(--heading);
+}
+
 pre {
   overflow: auto;
   margin: 8px 0 0;
@@ -431,6 +454,28 @@ pre {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+pre.collapsed-preview {
+  position: relative;
+  max-height: calc(1.55em * 5);
+  overflow: hidden;
+}
+
+.text-box:has(pre.collapsed-preview) {
+  position: relative;
+}
+
+.text-box:has(pre.collapsed-preview)::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  height: calc(1.55em * 2);
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(8, 17, 31, 0), rgba(8, 17, 31, 0.96));
+  border-radius: 0 0 18px 18px;
 }
 
 @media (max-width: 1100px) {
