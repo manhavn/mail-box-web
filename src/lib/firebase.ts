@@ -1,6 +1,7 @@
 import { getAuthToken } from './firebase-app'
 import { getDatabase, get, onValue, ref, type Unsubscribe } from 'firebase/database'
 import { app } from './firebase-app'
+import { getDatabaseUrl } from './firebase-config'
 
 const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz'
 
@@ -29,12 +30,7 @@ export type MessageSummary = {
   received_at?: string
 }
 
-const databaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL as string | undefined
 const database = getDatabase(app)
-
-export function getDatabaseUrl() {
-  return databaseUrl?.trim().replace(/\/+$/, '') ?? ''
-}
 
 export function decodePushIdTime(id: string) {
   if (id.length < 8) return null

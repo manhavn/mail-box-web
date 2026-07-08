@@ -500,67 +500,6 @@ h3 {
   padding: 16px;
 }
 
-.email-fullscreen-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  background: rgba(3, 7, 18, 0.86);
-  padding: 18px;
-  box-sizing: border-box;
-}
-
-.email-fullscreen-dialog {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.email-fullscreen-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid var(--line);
-  padding: 14px 16px;
-}
-
-.email-fullscreen-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.email-fullscreen-actions a {
-  border: 1px solid rgba(96, 165, 250, 0.45);
-  border-radius: 999px;
-  color: var(--accent-strong);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 12px;
-  text-decoration: none;
-}
-
-.email-fullscreen-actions a:hover {
-  background: rgba(37, 99, 235, 0.24);
-  color: var(--heading);
-}
-
-.email-fullscreen-frame {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  border: 0;
-  background: #ffffff;
-}
-
 pre {
   overflow: auto;
   margin: 8px 0 0;

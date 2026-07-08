@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { loginWithGoogle, logout, watchAuth, type AuthUser } from './lib/firebase-app'
-  import { getDatabaseUrl } from './lib/firebase'
+  import { getDatabaseUrl } from './lib/firebase-config'
 
   type Language = 'en' | 'vi'
 
