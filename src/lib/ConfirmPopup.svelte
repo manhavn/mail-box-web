@@ -43,7 +43,10 @@
   }
 
   .confirm-dialog {
+    box-sizing: border-box;
     width: min(420px, 100%);
+    max-width: 100%;
+    margin: 0;
     border: 1px solid var(--line);
     border-radius: 22px;
     background: rgba(14, 26, 43, 0.98);
@@ -91,5 +94,20 @@
     border-color: rgba(252, 165, 165, 0.42);
     background: rgba(127, 29, 29, 0.24);
     color: var(--danger);
+  }
+
+  @media (max-width: 420px) {
+    .confirm-backdrop {
+      padding: 12px;
+    }
+
+    .confirm-dialog {
+      padding: 16px;
+    }
+
+    .confirm-actions {
+      align-items: stretch;
+      flex-direction: column-reverse;
+    }
   }
 </style>
