@@ -70,6 +70,17 @@ export function decodePushIdTime(id: string) {
   return new Date(timestamp)
 }
 
+function getRecordTime(value: string | undefined, id: string) {
+  const parsedTime = value ? Date.parse(value) : Number.NaN
+  if (Number.isFinite(parsedTime)) return parsedTime
+  return decodePushIdTime(id)?.getTime() ?? 0
+}
+
+function compareByTimeDesc(a: { id: string }, b: { id: string }, getTimeValue: (item: { id: string }) => string | undefined) {
+  const timeDelta = getRecordTime(getTimeValue(b), b.id) - getRecordTime(getTimeValue(a), a.id)
+  return timeDelta || b.id.localeCompare(a.id)
+}
+
 export async function listGroups() {
   const groups = await request<Record<string, true> | null>('messageGroups', { shallow: 'true' })
   return Object.keys(groups ?? {}).sort((a, b) => a.localeCompare(b))
@@ -126,7 +137,7 @@ export function watchMessageSummaries(
         subject: message?.subject,
         received_at: message?.received_at,
       }))
-      .sort((a, b) => b.id.localeCompare(a.id))
+      .sort((a, b) => compareByTimeDesc(a, b, (message) => (message as MessageSummary).received_at))
 
     callback(messages)
   })
@@ -164,7 +175,7 @@ export async function listRandomEmails(userId: string, pageSize: number, beforeK
 
   return Object.entries(value ?? {})
     .map(([id, email]) => ({ id, ...email }))
-    .sort((a, b) => b.id.localeCompare(a.id))
+    .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at))
 }
 
 export function watchRandomEmails(userId: string, pageSize: number, callback: (emails: RandomEmail[]) => void): Unsubscribe {
@@ -176,7 +187,7 @@ export function watchRandomEmails(userId: string, pageSize: number, callback: (e
     callback(
       Object.entries(value ?? {})
         .map(([id, email]) => ({ id, ...email }))
-        .sort((a, b) => b.id.localeCompare(a.id)),
+        .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at)),
     )
   })
 }
@@ -196,7 +207,7 @@ export async function searchRandomEmails(userId: string, searchTerm: string, pag
 
   return Object.entries(value ?? {})
     .map(([id, email]) => ({ id, ...email }))
-    .sort((a, b) => b.id.localeCompare(a.id))
+    .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at))
 }
 
 export function watchSearchRandomEmails(
@@ -220,7 +231,7 @@ export function watchSearchRandomEmails(
     callback(
       Object.entries(value ?? {})
         .map(([id, email]) => ({ id, ...email }))
-        .sort((a, b) => b.id.localeCompare(a.id)),
+        .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at)),
     )
   })
 }
