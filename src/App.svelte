@@ -15,10 +15,16 @@
       copy: 'Copy',
       close: 'Close',
       collapse: 'Collapse',
+      addDomain: 'Add domain',
+      copyEmail: 'Copy email',
+      creatingEmail: 'Creating email...',
       data: 'Data',
       dataListHint: 'This list only loads push ids, from and recipients. It does not load `data` or `transcript`.',
       detailEmpty: 'Click a chat message to view the full content.',
+      delete: 'Delete',
       downloadHtml: 'Download HTML',
+      emailPrefix: 'Email prefix',
+      emailPrefixPlaceholder: 'Optional prefix, leave empty for fully random',
       expand: 'Expand',
       firebaseAuthBlocked:
         'Firebase Auth is blocking client sign-in. Open Firebase Console > Authentication > Settings > User actions and enable Create (sign-up), then try Google sign-in again.',
@@ -27,6 +33,7 @@
       from: 'From',
       googleSignIn: 'Google sign-in',
       groupCount: 'messages',
+      getRandomEmail: 'Get random email',
       loginDescription:
         'The app uses Firebase Authentication to get an ID token, then sends that token with REST requests to read Realtime Database.',
       loginTitle: 'Sign in to view mailbox',
@@ -37,6 +44,7 @@
       noMessages: 'This group has no messages.',
       noRecipients: 'No recipients',
       noOtp: 'No OTP found',
+      noRandomEmails: 'No random emails yet.',
       noRenderedContent: 'No rendered content found in this message.',
       notFound: 'This message was not found.',
       otpCode: 'OTP code',
@@ -46,7 +54,13 @@
       renderedEmail: 'Rendered email',
       renderedEmailFullScreen: 'Rendered email full screen',
       renderParseFailed: 'Could not parse MIME message',
+      randomDomain: 'Random domains',
+      randomDomainPlaceholder: 'Enter a domain and press Enter',
+      randomEmails: 'Random emails',
       refresh: 'Refresh',
+      saving: 'Saving...',
+      searchEmail: 'Search email',
+      settings: 'Settings',
       signIn: 'Sign in with Google',
       signingIn: 'Signing in...',
       subject: 'Subject',
@@ -67,10 +81,16 @@
       copy: 'Copy',
       close: 'Đóng',
       collapse: 'Thu gọn',
+      addDomain: 'Thêm domain',
+      copyEmail: 'Copy email',
+      creatingEmail: 'Đang tạo email...',
       data: 'Dữ liệu',
       dataListHint: 'Danh sách này chỉ lấy push id, from và recipients. Không tải `data` và `transcript`.',
       detailEmpty: 'Nhấn vào một tin chat để xem toàn bộ nội dung.',
+      delete: 'Xóa',
       downloadHtml: 'Tải HTML',
+      emailPrefix: 'Email prefix',
+      emailPrefixPlaceholder: 'Prefix tùy chọn, bỏ trống để random hoàn toàn',
       expand: 'Mở rộng',
       firebaseAuthBlocked:
         'Firebase Auth đang chặn đăng nhập từ client. Vào Firebase Console > Authentication > Settings > User actions và bật Create (sign-up), sau đó thử đăng nhập Google lại.',
@@ -79,6 +99,7 @@
       from: 'From',
       googleSignIn: 'Đăng nhập Google',
       groupCount: 'tin',
+      getRandomEmail: 'Tạo random email',
       loginDescription:
         'App dùng Firebase Authentication để lấy ID token, sau đó token này được gửi vào REST request đọc Realtime Database.',
       loginTitle: 'Đăng nhập để xem mailbox',
@@ -89,6 +110,7 @@
       noMessages: 'Nhóm này chưa có tin.',
       noRecipients: 'Không có người nhận',
       noOtp: 'Không tìm thấy OTP',
+      noRandomEmails: 'Chưa có random email nào.',
       noRenderedContent: 'Không tìm thấy nội dung render trong tin này.',
       notFound: 'Không tìm thấy tin này.',
       otpCode: 'Mã OTP',
@@ -98,7 +120,13 @@
       renderedEmail: 'Email đã render',
       renderedEmailFullScreen: 'Xem toàn màn hình',
       renderParseFailed: 'Không thể parse MIME message',
+      randomDomain: 'Random domains',
+      randomDomainPlaceholder: 'Nhập domain rồi nhấn Enter',
+      randomEmails: 'Random email',
       refresh: 'Làm mới',
+      saving: 'Đang lưu...',
+      searchEmail: 'Tìm email',
+      settings: 'Cài đặt',
       signIn: 'Đăng nhập bằng Google',
       signingIn: 'Đang đăng nhập...',
       subject: 'Tiêu đề',
@@ -115,7 +143,10 @@
 
   let language: Language = 'en'
   let InboxComponent: any = null
+  let SettingsPopupComponent: any = null
   let loadingInbox = false
+  let loadingSettingsPopup = false
+  let settingsOpen = false
   let user: AuthUser | null = null
   let checkingAuth = true
   let loggingIn = false
@@ -155,6 +186,21 @@ $: t = translations[language]
       error = getErrorMessage(cause)
     } finally {
       loadingInbox = false
+    }
+  }
+
+  async function openSettings() {
+    settingsOpen = true
+    if (SettingsPopupComponent || loadingSettingsPopup) return
+
+    loadingSettingsPopup = true
+    try {
+      SettingsPopupComponent = (await import('./lib/SettingsPopup.svelte')).default
+    } catch (cause) {
+      error = getErrorMessage(cause)
+      settingsOpen = false
+    } finally {
+      loadingSettingsPopup = false
     }
   }
 
@@ -220,6 +266,7 @@ $: t = translations[language]
             <img src={user.photoURL} alt="" />
           {/if}
           <span>{user.displayName ?? user.email}</span>
+          <button type="button" on:click={openSettings} disabled={loadingSettingsPopup}>{t.settings}</button>
           <button type="button" on:click={signOut}>{t.logout}</button>
         </div>
       {/if}
@@ -253,3 +300,7 @@ $: t = translations[language]
     {/if}
   {/if}
 </main>
+
+{#if settingsOpen && SettingsPopupComponent && user}
+  <svelte:component this={SettingsPopupComponent} {user} {t} close={() => (settingsOpen = false)} />
+{/if}

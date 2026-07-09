@@ -1,9 +1,45 @@
 {
   "rules": {
-    ".read": "auth != null",
-    "messageCleanup": {
-      ".read": true
+    ".read": false,
+    ".write": false,
+    "messageGroups": {
+      ".read": "auth != null",
+      ".write": true
     },
-    ".write": true
+    "messageSummaries": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "messages": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "messageCleanup": {
+      ".read": true,
+      ".write": true
+    },
+    "settings": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "domains": {
+          "$index": {
+            ".validate": "newData.isString()"
+          }
+        },
+        "emailPrefix": {
+          ".validate": "newData.isString() || !newData.exists()"
+        }
+      }
+    },
+    "userData": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "randomEmails": {
+          ".indexOn": ["email"]
+        }
+      }
+    }
   }
 }

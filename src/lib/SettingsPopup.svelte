@@ -1,0 +1,642 @@
+<script lang="ts">
+  import { onDestroy, onMount } from 'svelte'
+  import type { AuthUser } from './firebase-app'
+  import {
+    createRandomEmail,
+    deleteRandomEmail,
+    listRandomEmails,
+    saveEmailPrefix,
+    saveRandomDomains,
+    searchRandomEmails,
+    watchEmailPrefix,
+    watchRandomDomains,
+    type RandomEmail,
+  } from './firebase'
+
+  const PAGE_SIZE = 10
+
+  // oxlint-disable-next-line no-unassigned-vars
+  export let user: AuthUser
+  // oxlint-disable-next-line no-unassigned-vars
+  export let t: Record<string, string>
+  // oxlint-disable-next-line no-unassigned-vars
+  export let close: () => void
+
+  let domains: string[] = []
+  let domainInput = ''
+  let emailPrefix = ''
+  let emailSearch = ''
+  let randomEmails: RandomEmail[] = []
+  let loadingEmails = false
+  let loadingMoreEmails = false
+  let hasMoreEmails = true
+  let savingDomains = false
+  let creatingEmail = false
+  let copiedEmailId = ''
+  let error = ''
+  let unwatchDomains: (() => void) | null = null
+  let unwatchEmailPrefix: (() => void) | null = null
+  let saveDomainsTimeout: ReturnType<typeof setTimeout> | null = null
+  let saveEmailPrefixTimeout: ReturnType<typeof setTimeout> | null = null
+  let searchEmailsTimeout: ReturnType<typeof setTimeout> | null = null
+  let copiedEmailTimeout: ReturnType<typeof setTimeout> | null = null
+
+  $: canCreateRandomEmail = domains.length > 0 && !creatingEmail
+
+  onMount(() => {
+    unwatchDomains = watchRandomDomains(user.uid, (nextDomains) => {
+      domains = nextDomains
+    })
+    unwatchEmailPrefix = watchEmailPrefix(user.uid, (nextPrefix) => {
+      emailPrefix = nextPrefix
+    })
+    void loadInitialEmails()
+  })
+
+  onDestroy(() => {
+    unwatchDomains?.()
+    unwatchEmailPrefix?.()
+    if (saveDomainsTimeout) clearTimeout(saveDomainsTimeout)
+    if (saveEmailPrefixTimeout) clearTimeout(saveEmailPrefixTimeout)
+    if (searchEmailsTimeout) clearTimeout(searchEmailsTimeout)
+    if (copiedEmailTimeout) clearTimeout(copiedEmailTimeout)
+  })
+
+  function addDomainFromInput() {
+    const domain = normalizeDomain(domainInput)
+    if (!domain || domains.includes(domain)) {
+      domainInput = ''
+      return
+    }
+
+    domains = [...domains, domain]
+    domainInput = ''
+    scheduleSaveDomains()
+  }
+
+  function removeDomain(domain: string) {
+    domains = domains.filter((currentDomain) => currentDomain !== domain)
+    scheduleSaveDomains()
+  }
+
+  function scheduleSaveDomains() {
+    if (saveDomainsTimeout) clearTimeout(saveDomainsTimeout)
+    savingDomains = true
+    saveDomainsTimeout = setTimeout(() => {
+      void persistDomains()
+    }, 250)
+  }
+
+  async function persistDomains() {
+    error = ''
+    try {
+      await saveRandomDomains(user.uid, domains)
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingDomains = false
+      saveDomainsTimeout = null
+    }
+  }
+
+  function updateEmailPrefix(value: string) {
+    emailPrefix = normalizeEmailPrefix(value)
+    scheduleSaveEmailPrefix()
+  }
+
+  function scheduleSaveEmailPrefix() {
+    if (saveEmailPrefixTimeout) clearTimeout(saveEmailPrefixTimeout)
+    savingDomains = true
+    saveEmailPrefixTimeout = setTimeout(() => {
+      void persistEmailPrefix()
+    }, 250)
+  }
+
+  async function persistEmailPrefix() {
+    error = ''
+    try {
+      await saveEmailPrefix(user.uid, emailPrefix)
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingDomains = false
+      saveEmailPrefixTimeout = null
+    }
+  }
+
+  async function loadInitialEmails() {
+    error = ''
+    loadingEmails = true
+    try {
+      const searchTerm = emailSearch.trim()
+      randomEmails = searchTerm
+        ? await searchRandomEmails(user.uid, normalizeEmailSearch(searchTerm), PAGE_SIZE)
+        : await listRandomEmails(user.uid, PAGE_SIZE)
+      hasMoreEmails = !searchTerm && randomEmails.length === PAGE_SIZE
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      loadingEmails = false
+    }
+  }
+
+  async function loadMoreEmails() {
+    if (emailSearch.trim() || loadingEmails || loadingMoreEmails || !hasMoreEmails || randomEmails.length === 0) return
+
+    error = ''
+    loadingMoreEmails = true
+    try {
+      const nextEmails = await listRandomEmails(user.uid, PAGE_SIZE, randomEmails[randomEmails.length - 1].id)
+      randomEmails = [...randomEmails, ...nextEmails]
+      hasMoreEmails = nextEmails.length === PAGE_SIZE
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      loadingMoreEmails = false
+    }
+  }
+
+  function handleEmailScroll(event: Event) {
+    const element = event.currentTarget as HTMLElement
+    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 48) {
+      void loadMoreEmails()
+    }
+  }
+
+  function updateEmailSearch(value: string) {
+    emailSearch = value
+    if (searchEmailsTimeout) clearTimeout(searchEmailsTimeout)
+    searchEmailsTimeout = setTimeout(() => {
+      void loadInitialEmails()
+    }, 300)
+  }
+
+  function closeOnBackdrop(event: MouseEvent) {
+    if (event.target === event.currentTarget) close()
+  }
+
+  async function getRandomEmail() {
+    if (!canCreateRandomEmail) return
+
+    const domain = domains[Math.floor(Math.random() * domains.length)]
+    const email = `${createRandomLocalPart(emailPrefix)}@${domain}`
+    error = ''
+    creatingEmail = true
+
+    try {
+      const randomEmail = await createRandomEmail(user.uid, email, domain)
+      randomEmails = [randomEmail, ...randomEmails]
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      creatingEmail = false
+    }
+  }
+
+  async function copyEmail(randomEmail: RandomEmail) {
+    await navigator.clipboard.writeText(randomEmail.email)
+    copiedEmailId = randomEmail.id
+
+    if (copiedEmailTimeout) clearTimeout(copiedEmailTimeout)
+    copiedEmailTimeout = setTimeout(() => {
+      copiedEmailId = ''
+      copiedEmailTimeout = null
+    }, 1600)
+  }
+
+  async function removeEmail(randomEmail: RandomEmail) {
+    error = ''
+    try {
+      await deleteRandomEmail(user.uid, randomEmail.id)
+      randomEmails = randomEmails.filter((email) => email.id !== randomEmail.id)
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    }
+  }
+
+  function normalizeDomain(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^@/, '')
+      .split('/')[0]
+      .replace(/[^a-z0-9.-]/g, '')
+      .replace(/^\.+|\.+$/g, '')
+  }
+
+  function normalizeEmailPrefix(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._+-]/g, '')
+      .replace(/^[._+-]+|[._+-]+$/g, '')
+  }
+
+  function normalizeEmailSearch(value: string) {
+    return value.trim().toLowerCase()
+  }
+
+  function createRandomLocalPart(prefix: string) {
+    const bytes = crypto.getRandomValues(new Uint8Array(8))
+    const randomPart = Array.from(bytes, (byte) => byte.toString(36).padStart(2, '0')).join('').slice(0, 12)
+    return prefix ? `${prefix}${randomPart}` : randomPart
+  }
+
+  function formatCreatedAt(value: string) {
+    return new Date(value).toLocaleString()
+  }
+
+  function getErrorMessage(cause: unknown) {
+    return cause instanceof Error ? cause.message : String(cause)
+  }
+</script>
+
+<svelte:window on:keydown={(event) => event.key === 'Escape' && close()} />
+
+<div class="settings-backdrop" role="presentation" on:click={closeOnBackdrop}>
+  <dialog class="settings-dialog" aria-modal="true" aria-label={t.settings} open>
+    <header class="settings-header">
+      <div>
+        <h2>{t.settings}</h2>
+      </div>
+      <button type="button" class="ghost-button" on:click={close}>{t.close}</button>
+    </header>
+
+    {#if error}
+      <p class="settings-alert">{error}</p>
+    {/if}
+
+    <article class="settings-box">
+      <div class="settings-box-heading">
+        <h3>{t.randomDomain}</h3>
+        {#if savingDomains}
+          <span>{t.saving}</span>
+        {/if}
+      </div>
+      <div class="domain-tags">
+        {#each domains as domain}
+          <span class="domain-chip">
+            {domain}
+            <button type="button" aria-label={`${t.delete} ${domain}`} on:click={() => removeDomain(domain)}>x</button>
+          </span>
+        {/each}
+        <input
+          id="random-domain-input"
+          bind:value={domainInput}
+          placeholder={domains.length ? t.addDomain : t.randomDomainPlaceholder}
+          on:keydown={(event) => {
+            if (event.key === 'Enter' || event.key === ',' || event.key === 'Tab') {
+              event.preventDefault()
+              addDomainFromInput()
+            }
+          }}
+          on:blur={addDomainFromInput}
+        />
+      </div>
+    </article>
+
+    <article class="settings-box prefix-action-box">
+      <label class="prefix-field">
+        <span>{t.emailPrefix}</span>
+        <input
+          class="prefix-input"
+          value={emailPrefix}
+          placeholder={t.emailPrefixPlaceholder}
+          on:input={(event) => updateEmailPrefix(event.currentTarget.value)}
+        />
+      </label>
+      <button type="button" class="primary-button" on:click={getRandomEmail} disabled={!canCreateRandomEmail}>
+        {creatingEmail ? t.creatingEmail : t.getRandomEmail}
+      </button>
+    </article>
+
+    <section class="random-email-panel">
+      <div class="settings-box-heading">
+        <h3>{t.randomEmails}</h3>
+        <input
+          class="search-input"
+          value={emailSearch}
+          placeholder={t.searchEmail}
+          on:input={(event) => updateEmailSearch(event.currentTarget.value)}
+        />
+        <button type="button" class="ghost-button small" on:click={loadInitialEmails} disabled={loadingEmails}>{t.refresh}</button>
+      </div>
+
+      {#if loadingEmails}
+        <p class="muted">{t.loadingEmails}</p>
+      {:else if randomEmails.length === 0}
+        <p class="muted">{t.noRandomEmails}</p>
+      {:else}
+        <div class="random-email-list" on:scroll={handleEmailScroll}>
+          {#each randomEmails as randomEmail}
+            <article class="random-email-item">
+              <div>
+                <strong>{randomEmail.email}</strong>
+                <span>{formatCreatedAt(randomEmail.created_at)}</span>
+              </div>
+              <div class="random-email-actions">
+                <button type="button" on:click={() => copyEmail(randomEmail)}>
+                  {copiedEmailId === randomEmail.id ? t.copied : t.copyEmail}
+                </button>
+                <button type="button" class="danger-button" on:click={() => removeEmail(randomEmail)}>{t.delete}</button>
+              </div>
+            </article>
+          {/each}
+          {#if loadingMoreEmails}
+            <p class="muted loading-more">{t.loadingEmails}</p>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  </dialog>
+</div>
+
+<style>
+  .settings-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    background: rgba(3, 7, 18, 0.72);
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
+  .settings-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(720px, 100%);
+    height: min(960px, calc(100vh - 24px));
+    max-height: calc(100vh - 24px);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    background: rgba(14, 26, 43, 0.96);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .settings-header,
+  .settings-box-heading,
+  .random-email-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .settings-box-heading span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .settings-box,
+  .random-email-panel {
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: rgba(8, 17, 31, 0.68);
+    padding: 12px;
+  }
+
+  .prefix-action-box {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+  }
+
+  .prefix-field {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prefix-field span {
+    color: var(--accent-strong);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .domain-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 46px;
+    margin-top: 10px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(18, 36, 59, 0.62);
+    padding: 8px;
+    cursor: text;
+  }
+
+  .domain-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.24);
+    color: var(--heading);
+    font-size: 13px;
+    padding: 5px 8px 5px 10px;
+  }
+
+  .domain-chip button {
+    width: 18px;
+    height: 18px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    color: var(--heading);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+
+  .domain-tags input,
+  .prefix-input,
+  .search-input {
+    box-sizing: border-box;
+    color: var(--text);
+    font: inherit;
+  }
+
+  .domain-tags input {
+    flex: 1 1 180px;
+    min-width: 120px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+  }
+
+  .prefix-input,
+  .search-input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    outline: 0;
+    background: rgba(18, 36, 59, 0.62);
+    padding: 12px;
+  }
+
+  .search-input {
+    max-width: 280px;
+    padding: 7px 10px;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .random-email-actions button {
+    border: 1px solid rgba(96, 165, 250, 0.55);
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.24);
+    color: var(--heading);
+    cursor: pointer;
+    font-weight: 700;
+    padding: 9px 14px;
+  }
+
+  .primary-button {
+    flex: 0 0 auto;
+    min-height: 47px;
+  }
+
+  .primary-button:disabled,
+  .ghost-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .ghost-button {
+    background: transparent;
+  }
+
+  .ghost-button.small {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .random-email-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .random-email-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    margin-top: 10px;
+    overflow: auto;
+    padding-right: 2px;
+    scrollbar-color: rgba(147, 197, 253, 0.45) transparent;
+    scrollbar-width: thin;
+  }
+
+  .random-email-list::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .random-email-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .random-email-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(147, 197, 253, 0.45);
+  }
+
+  .random-email-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(18, 36, 59, 0.65);
+    padding: 12px;
+  }
+
+  .random-email-item strong,
+  .random-email-item span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .random-email-item strong {
+    color: var(--heading);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .random-email-item span {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .random-email-actions button {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .random-email-actions .danger-button {
+    border-color: rgba(252, 165, 165, 0.42);
+    background: rgba(127, 29, 29, 0.24);
+    color: var(--danger);
+  }
+
+  .settings-alert {
+    border: 1px solid rgba(252, 165, 165, 0.35);
+    border-radius: 14px;
+    background: rgba(127, 29, 29, 0.24);
+    color: var(--danger);
+    padding: 10px 12px;
+  }
+
+  .loading-more {
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  @media (max-width: 620px) {
+    .settings-dialog {
+      padding: 16px;
+    }
+
+    .random-email-item {
+      grid-template-columns: 1fr;
+    }
+
+    .random-email-panel .settings-box-heading {
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+
+    .random-email-panel .settings-box-heading h3 {
+      flex: 1 0 100%;
+    }
+
+    .search-input {
+      flex: 1 1 0;
+      max-width: none;
+      min-width: 0;
+    }
+
+    .random-email-actions {
+      justify-content: flex-start;
+    }
+  }
+</style>

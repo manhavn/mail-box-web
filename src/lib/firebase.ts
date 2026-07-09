@@ -1,5 +1,21 @@
 import { getAuthToken } from './firebase-app'
-import { getDatabase, get, onValue, ref, type Unsubscribe } from 'firebase/database'
+import {
+  endBefore,
+  get,
+  getDatabase,
+  limitToLast,
+  onValue,
+  orderByKey,
+  orderByChild,
+  push,
+  query,
+  ref,
+  remove,
+  set,
+  startAt,
+  endAt,
+  type Unsubscribe,
+} from 'firebase/database'
 import { app } from './firebase-app'
 import { getDatabaseUrl } from './firebase-config'
 
@@ -30,6 +46,13 @@ export type MessageSummary = {
   recipients?: string[]
   subject?: string
   received_at?: string
+}
+
+export type RandomEmail = {
+  id: string
+  email: string
+  domain: string
+  created_at: string
 }
 
 const database = getDatabase(app)
@@ -107,6 +130,75 @@ export function watchMessageSummaries(
 
     callback(messages)
   })
+}
+
+export function watchRandomDomains(userId: string, callback: (domains: string[]) => void): Unsubscribe {
+  return onValue(ref(database, `settings/${userId}/domains`), (snapshot) => {
+    const value = snapshot.val() as unknown
+    callback(Array.isArray(value) ? value.filter((domain) => typeof domain === 'string') : [])
+  })
+}
+
+export function watchEmailPrefix(userId: string, callback: (prefix: string) => void): Unsubscribe {
+  return onValue(ref(database, `settings/${userId}/emailPrefix`), (snapshot) => {
+    const value = snapshot.val() as unknown
+    callback(typeof value === 'string' ? value : '')
+  })
+}
+
+export async function saveRandomDomains(userId: string, domains: string[]) {
+  await set(ref(database, `settings/${userId}/domains`), domains)
+}
+
+export async function saveEmailPrefix(userId: string, prefix: string) {
+  await set(ref(database, `settings/${userId}/emailPrefix`), prefix)
+}
+
+export async function listRandomEmails(userId: string, pageSize: number, beforeKey?: string) {
+  const emailRef = ref(database, `userData/${userId}/randomEmails`)
+  const emailQuery = beforeKey
+    ? query(emailRef, orderByKey(), endBefore(beforeKey), limitToLast(pageSize))
+    : query(emailRef, orderByKey(), limitToLast(pageSize))
+  const snapshot = await get(emailQuery)
+  const value = snapshot.val() as Record<string, Omit<RandomEmail, 'id'>> | null
+
+  return Object.entries(value ?? {})
+    .map(([id, email]) => ({ id, ...email }))
+    .sort((a, b) => b.id.localeCompare(a.id))
+}
+
+export async function searchRandomEmails(userId: string, searchTerm: string, pageSize: number) {
+  const emailRef = ref(database, `userData/${userId}/randomEmails`)
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+  const emailQuery = query(
+    emailRef,
+    orderByChild('email'),
+    startAt(normalizedSearchTerm),
+    endAt(`${normalizedSearchTerm}\uf8ff`),
+    limitToLast(pageSize),
+  )
+  const snapshot = await get(emailQuery)
+  const value = snapshot.val() as Record<string, Omit<RandomEmail, 'id'>> | null
+
+  return Object.entries(value ?? {})
+    .map(([id, email]) => ({ id, ...email }))
+    .sort((a, b) => b.id.localeCompare(a.id))
+}
+
+export async function createRandomEmail(userId: string, email: string, domain: string) {
+  const emailRef = push(ref(database, `userData/${userId}/randomEmails`))
+  const randomEmail: Omit<RandomEmail, 'id'> = {
+    email,
+    domain,
+    created_at: new Date().toISOString(),
+  }
+
+  await set(emailRef, randomEmail)
+  return { id: emailRef.key ?? '', ...randomEmail }
+}
+
+export async function deleteRandomEmail(userId: string, emailId: string) {
+  await remove(ref(database, `userData/${userId}/randomEmails/${emailId}`))
 }
 
 async function request<T>(path: string, params: Record<string, string> = {}) {
