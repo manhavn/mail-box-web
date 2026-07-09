@@ -14,6 +14,7 @@
   } from './firebase'
 
   const PAGE_SIZE = 10
+  const mxRecords = parseMxRecords(import.meta.env.VITE_RANDOM_EMAIL_MX_RECORDS as string | undefined)
 
   // oxlint-disable-next-line no-unassigned-vars
   export let user: AuthUser
@@ -37,6 +38,7 @@
   let savingDomains = false
   let creatingEmail = false
   let copiedEmailId = ''
+  let copiedMxRecord = ''
   let error = ''
   let unwatchDomains: (() => void) | null = null
   let unwatchEmailPrefix: (() => void) | null = null
@@ -44,6 +46,7 @@
   let saveEmailPrefixTimeout: ReturnType<typeof setTimeout> | null = null
   let searchEmailsTimeout: ReturnType<typeof setTimeout> | null = null
   let copiedEmailTimeout: ReturnType<typeof setTimeout> | null = null
+  let mxCopiedTimeout: ReturnType<typeof setTimeout> | null = null
 
   $: canCreateRandomEmail = domains.length > 0 && !creatingEmail
 
@@ -64,6 +67,7 @@
     if (saveEmailPrefixTimeout) clearTimeout(saveEmailPrefixTimeout)
     if (searchEmailsTimeout) clearTimeout(searchEmailsTimeout)
     if (copiedEmailTimeout) clearTimeout(copiedEmailTimeout)
+    if (mxCopiedTimeout) clearTimeout(mxCopiedTimeout)
   })
 
   function addDomainFromInput() {
@@ -208,6 +212,19 @@
     }, 1600)
   }
 
+  async function copyMxRecord(record: { host: string; priority: string; server: string; ttl: string }) {
+    const value = formatMxRecordForCopy(record)
+
+    await navigator.clipboard.writeText(value)
+    copiedMxRecord = value
+
+    if (mxCopiedTimeout) clearTimeout(mxCopiedTimeout)
+    mxCopiedTimeout = setTimeout(() => {
+      copiedMxRecord = ''
+      mxCopiedTimeout = null
+    }, 1600)
+  }
+
   async function requestRemoveEmail(randomEmail: RandomEmail) {
     pendingDeleteEmail = randomEmail
     await loadConfirmPopup()
@@ -290,6 +307,21 @@
   function getErrorMessage(cause: unknown) {
     return cause instanceof Error ? cause.message : String(cause)
   }
+
+  function parseMxRecords(value: string | undefined) {
+    return (value ?? '')
+      .split(',')
+      .map((server) => server.trim())
+      .filter(Boolean)
+      .map((server, index) => {
+        const normalizedServer = server.endsWith('.') ? server : `${server}.`
+        return { host: '@', priority: String((index + 1) * 10), server: normalizedServer, ttl: '3600' }
+      })
+  }
+
+  function formatMxRecordForCopy(record: { host: string; priority: string; server: string; ttl: string }) {
+    return `Type=MX Host=${record.host} Priority=${record.priority} Value=${record.server} TTL=${record.ttl}`
+  }
 </script>
 
 <svelte:window on:keydown={(event) => event.key === 'Escape' && close()} />
@@ -309,7 +341,33 @@
 
     <article class="settings-box">
       <div class="settings-box-heading">
-        <h3>{t.randomDomain}</h3>
+        <div class="domain-title-row">
+          <h3>{t.randomDomain}</h3>
+          <button type="button" class="mx-help" aria-label={t.randomDomainMxTip}>?</button>
+          <div class="mx-tooltip" role="tooltip">
+            <p>{t.randomDomainMxIntro}</p>
+            <p>{t.randomDomainMxFormat}</p>
+            <p>{t.randomDomainMxRootHelp}</p>
+            <p>{t.randomDomainMxSubdomainHelp}</p>
+            {#if mxRecords.length > 0}
+              <div class="mx-tooltip-heading">
+                <strong>{t.randomDomainMxExample}</strong>
+              </div>
+              <div class="mx-record-list">
+                {#each mxRecords as record}
+                  <div class="mx-record-row">
+                    <code>{formatMxRecordForCopy(record)}</code>
+                    <button type="button" on:click={() => copyMxRecord(record)}>
+                      {copiedMxRecord === formatMxRecordForCopy(record) ? t.copied : t.copy}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p>{t.randomDomainMxMissing}</p>
+            {/if}
+          </div>
+        </div>
         {#if savingDomains}
           <span>{t.saving}</span>
         {/if}
@@ -447,6 +505,121 @@
     font-size: 12px;
   }
 
+  .domain-title-row {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .domain-title-row::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: min(520px, calc(100vw - 48px));
+    height: 8px;
+  }
+
+  .mx-help {
+    display: inline-grid;
+    place-items: center;
+    width: 17px;
+    height: 17px;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 999px;
+    background: rgba(96, 165, 250, 0.12);
+    color: var(--accent-strong);
+    cursor: help;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .mx-tooltip {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    z-index: 90;
+    display: none;
+    width: min(520px, calc(100vw - 48px));
+    border: 1px solid rgba(96, 165, 250, 0.32);
+    border-radius: 16px;
+    background: rgba(8, 17, 31, 0.98);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    padding: 12px;
+  }
+
+  .domain-title-row:hover .mx-tooltip,
+  .domain-title-row:focus-within .mx-tooltip {
+    display: block;
+  }
+
+  .mx-tooltip p {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+    text-transform: none;
+  }
+
+  .mx-tooltip strong {
+    display: block;
+    color: var(--accent-strong);
+    font-size: 12px;
+  }
+
+  .mx-tooltip-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .mx-record-row button {
+    flex: 0 0 auto;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.24);
+    color: var(--accent-strong);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 9px;
+  }
+
+  .mx-record-row button:hover {
+    background: rgba(37, 99, 235, 0.36);
+    color: var(--heading);
+  }
+
+  .mx-record-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .mx-record-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mx-record-list code {
+    display: block;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(18, 36, 59, 0.72);
+    color: #e5eefb;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 8px;
+    white-space: nowrap;
+  }
+
   .settings-box,
   .random-email-panel {
     border: 1px solid var(--line);
@@ -490,22 +663,13 @@
     background: rgba(18, 36, 59, 0.62);
     overflow: auto;
     padding: 6px;
-    scrollbar-color: rgba(147, 197, 253, 0.4) transparent;
-    scrollbar-width: thin;
+    scrollbar-width: none;
     cursor: text;
   }
 
   .domain-tags::-webkit-scrollbar {
-    width: 3px;
-  }
-
-  .domain-tags::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .domain-tags::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(147, 197, 253, 0.4);
+    width: 0;
+    height: 0;
   }
 
   .domain-chip {
@@ -621,21 +785,21 @@
     margin-top: 10px;
     overflow: auto;
     padding-right: 2px;
-    scrollbar-color: rgba(147, 197, 253, 0.45) transparent;
-    scrollbar-width: thin;
+    scrollbar-width: none;
   }
 
   .random-email-list::-webkit-scrollbar {
-    width: 3px;
+    width: 0;
+    height: 0;
   }
 
-  .random-email-list::-webkit-scrollbar-track {
-    background: transparent;
+  .mx-record-list code::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 
-  .random-email-list::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(147, 197, 253, 0.45);
+  .mx-record-list code {
+    scrollbar-width: none;
   }
 
   .random-email-item {
