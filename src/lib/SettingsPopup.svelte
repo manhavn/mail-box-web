@@ -463,7 +463,7 @@
           on:input={(event) => updateEmailSearch(event.currentTarget.value)}
         />
         <button type="button" class="ghost-button small" on:click={() => (addingManualEmail = !addingManualEmail)}>
-          {t.addEmail}
+          {addingManualEmail ? t.cancelAddEmail : t.addEmail}
         </button>
       </div>
 

@@ -10,6 +10,7 @@
     en: {
       authChecking: 'Checking sign-in...',
       cancel: 'Cancel',
+      cancelAddEmail: 'Cancel add',
       chatGroups: 'Message groups',
       chooseGroup: 'Choose a chat group to view messages.',
       copied: 'Copied',
@@ -94,6 +95,7 @@
     vi: {
       authChecking: 'Đang kiểm tra đăng nhập...',
       cancel: 'Hủy',
+      cancelAddEmail: 'Hủy thêm',
       chatGroups: 'Nhóm tin nhắn',
       chooseGroup: 'Chọn một nhóm chat để xem tin.',
       copied: 'Đã copy',
