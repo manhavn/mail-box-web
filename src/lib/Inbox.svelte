@@ -8,6 +8,7 @@
     watchGroups,
     watchMessageSummaries,
   } from './firebase'
+  import { downloadRenderedEmailHtml, getRenderedEmailDocument } from './rendered-email'
 
   // oxlint-disable-next-line no-unassigned-vars
   export let language: 'en' | 'vi'
@@ -174,6 +175,17 @@
     } finally {
       loadingEmailFullscreen = false
     }
+  }
+
+  function downloadRenderedEmail() {
+    if (!selectedMessage || !(parsedEmailHtml || parsedEmailText)) return
+    downloadRenderedEmailHtml({
+      html: parsedEmailHtml,
+      text: parsedEmailText,
+      message: selectedMessage,
+      formatPushTime,
+      formatRecipients,
+    })
   }
 
   async function copyTextBox(field: string, value: string) {
@@ -433,9 +445,22 @@
           <div class="text-box-heading">
             <h3>{t.renderedEmail}</h3>
             {#if parsedEmailHtml || parsedEmailText}
-              <a href="#fullscreen-email" on:click|preventDefault={openRenderedEmailFullscreen}>
-                {t.renderedEmailFullScreen}
-              </a>
+              <div class="text-box-actions">
+                <a
+                  class="icon-link"
+                  href="#download-email"
+                  title={t.downloadHtml}
+                  aria-label={t.downloadHtml}
+                  on:click|preventDefault={downloadRenderedEmail}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <path d="M10 2.5a.75.75 0 0 1 .75.75v8.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.25A.75.75 0 0 1 10 2.5Zm-5 12a.75.75 0 0 1 .75.75v1h8.5v-1a.75.75 0 0 1 1.5 0V17a.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75v-1.75A.75.75 0 0 1 5 14.5Z" />
+                  </svg>
+                </a>
+                <a href="#fullscreen-email" on:click|preventDefault={openRenderedEmailFullscreen}>
+                  {t.renderedEmailFullScreen}
+                </a>
+              </div>
             {/if}
           </div>
 
@@ -443,10 +468,13 @@
             <p class="muted parsed-email-status">{t.parsingMime}</p>
           {:else if parsedEmailError}
             <p class="muted parsed-email-status">{t.renderParseFailed}: {parsedEmailError}</p>
-          {:else if parsedEmailHtml}
-            <div class="email-html-preview">{@html parsedEmailHtml}</div>
-          {:else if parsedEmailText}
-            <pre class="email-text-preview">{parsedEmailText}</pre>
+          {:else if parsedEmailHtml || parsedEmailText}
+            <iframe
+              class="email-html-preview"
+              title={t.renderedEmail}
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              srcdoc={getRenderedEmailDocument(parsedEmailHtml, parsedEmailText)}
+            ></iframe>
           {:else}
             <p class="muted parsed-email-status">{t.noRenderedContent}</p>
           {/if}

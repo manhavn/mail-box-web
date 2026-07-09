@@ -469,6 +469,27 @@ h3 {
   color: var(--heading);
 }
 
+.text-box-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.text-box-heading a.icon-link {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+}
+
+.text-box-heading a.icon-link svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .rendered-email-box {
   background: rgba(8, 17, 31, 0.68);
   color: var(--text);
@@ -484,30 +505,14 @@ h3 {
 }
 
 .email-html-preview {
-  overflow: auto;
+  width: 100%;
   margin-top: 12px;
+  min-height: 360px;
   max-height: 520px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #ffffff;
-  color: #172033;
-  padding: 16px;
-}
-
-.email-html-preview * {
-  max-width: 100%;
-}
-
-.email-html-preview img {
-  height: auto;
-}
-
-.email-text-preview {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(8, 17, 31, 0.68);
-  color: #e5eefb;
-  padding: 16px;
+  box-sizing: border-box;
 }
 
 pre {
