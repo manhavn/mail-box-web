@@ -43,6 +43,8 @@
   }
 
   .confirm-dialog {
+    position: static;
+    inset: auto;
     box-sizing: border-box;
     width: min(420px, 100%);
     max-width: 100%;
