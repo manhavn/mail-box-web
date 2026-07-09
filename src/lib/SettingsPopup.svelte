@@ -319,7 +319,7 @@
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9._+-]/g, '')
-      .replace(/^[._+-]+|[._+-]+$/g, '')
+      .replace(/^[._+-]+/g, '')
   }
 
   function normalizeEmailSearch(value: string) {
