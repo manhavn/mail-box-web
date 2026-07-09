@@ -205,6 +205,16 @@ h3 {
   font-size: 12px;
 }
 
+.user-chip button:not(:disabled):hover {
+  background: rgba(37, 99, 235, 0.36);
+  color: #f8fbff;
+}
+
+.user-chip button:not(:disabled):active {
+  background: rgba(29, 78, 216, 0.44);
+  transform: translateY(1px);
+}
+
 .google-button {
   margin-top: 20px;
   padding: 12px 18px;

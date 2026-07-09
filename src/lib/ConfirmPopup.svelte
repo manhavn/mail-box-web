@@ -92,10 +92,25 @@
     background: transparent;
   }
 
+  .ghost-button:hover {
+    background: rgba(37, 99, 235, 0.14);
+    color: var(--heading);
+  }
+
+  .ghost-button:active,
+  .danger-button:active {
+    transform: translateY(1px);
+  }
+
   .danger-button {
     border-color: rgba(252, 165, 165, 0.42);
     background: rgba(127, 29, 29, 0.24);
     color: var(--danger);
+  }
+
+  .danger-button:hover {
+    background: rgba(127, 29, 29, 0.38);
+    color: #fecaca;
   }
 
   @media (max-width: 420px) {
