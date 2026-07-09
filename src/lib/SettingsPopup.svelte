@@ -332,7 +332,11 @@
       <div>
         <h2>{t.settings}</h2>
       </div>
-      <button type="button" class="ghost-button" on:click={close}>{t.close}</button>
+      <div class="settings-header-actions">
+        <a href="https://github.com/manhavn/mail-box" target="_blank" rel="noreferrer">{t.sourceCodeServer}</a>
+        <a href="https://github.com/manhavn/mail-box-web" target="_blank" rel="noreferrer">{t.sourceCodeUi}</a>
+        <button type="button" class="ghost-button" on:click={close}>{t.close}</button>
+      </div>
     </header>
 
     {#if error}
@@ -504,6 +508,29 @@
   .settings-box-heading span {
     color: var(--muted);
     font-size: 12px;
+  }
+
+  .settings-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .settings-header-actions a {
+    flex: 0 0 auto;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 999px;
+    color: var(--accent-strong);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 12px;
+    text-decoration: none;
+  }
+
+  .settings-header-actions a:hover {
+    background: rgba(37, 99, 235, 0.24);
+    color: var(--heading);
   }
 
   .domain-title-row {
@@ -867,6 +894,16 @@
   @media (max-width: 620px) {
     .settings-dialog {
       padding: 16px;
+    }
+
+    .settings-header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .settings-header-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
     }
 
     .random-email-item {
