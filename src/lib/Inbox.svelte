@@ -77,12 +77,6 @@
     }
   }
 
-  function refreshGroups() {
-    unwatchGroups?.()
-    unwatchGroups = null
-    watchInitialGroups()
-  }
-
   function selectGroup(group: string) {
     selectedGroup = group
     selectedMessageId = ''
@@ -291,7 +285,6 @@
   <aside class="panel groups-panel" aria-label="Chat groups">
     <div class="panel-heading">
       <h2>{t.chatGroups}</h2>
-        <button type="button" on:click={refreshGroups} disabled={loadingGroups}>{t.refresh}</button>
     </div>
 
     {#if loadingGroups}
