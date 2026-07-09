@@ -27,8 +27,12 @@
   let emailPrefix = ''
   let emailSearch = ''
   let randomEmails: RandomEmail[] = []
+  let pendingDeleteDomain = ''
+  let pendingDeleteEmail: RandomEmail | null = null
+  let ConfirmPopupComponent: any = null
   let loadingEmails = false
   let loadingMoreEmails = false
+  let loadingConfirmPopup = false
   let hasMoreEmails = true
   let savingDomains = false
   let creatingEmail = false
@@ -74,9 +78,9 @@
     scheduleSaveDomains()
   }
 
-  function removeDomain(domain: string) {
-    domains = domains.filter((currentDomain) => currentDomain !== domain)
-    scheduleSaveDomains()
+  async function requestRemoveDomain(domain: string) {
+    pendingDeleteDomain = domain
+    await loadConfirmPopup()
   }
 
   function scheduleSaveDomains() {
@@ -204,14 +208,50 @@
     }, 1600)
   }
 
-  async function removeEmail(randomEmail: RandomEmail) {
+  async function requestRemoveEmail(randomEmail: RandomEmail) {
+    pendingDeleteEmail = randomEmail
+    await loadConfirmPopup()
+  }
+
+  async function loadConfirmPopup() {
+    if (ConfirmPopupComponent || loadingConfirmPopup) return
+
+    loadingConfirmPopup = true
+    try {
+      ConfirmPopupComponent = (await import('./ConfirmPopup.svelte')).default
+    } catch (cause) {
+      error = getErrorMessage(cause)
+      pendingDeleteDomain = ''
+      pendingDeleteEmail = null
+    } finally {
+      loadingConfirmPopup = false
+    }
+  }
+
+  function removePendingDomain() {
+    if (!pendingDeleteDomain) return
+    domains = domains.filter((currentDomain) => currentDomain !== pendingDeleteDomain)
+    pendingDeleteDomain = ''
+    scheduleSaveDomains()
+  }
+
+  async function removePendingEmail() {
+    const randomEmail = pendingDeleteEmail
+    if (!randomEmail) return
+
     error = ''
     try {
       await deleteRandomEmail(user.uid, randomEmail.id)
       randomEmails = randomEmails.filter((email) => email.id !== randomEmail.id)
+      pendingDeleteEmail = null
     } catch (cause) {
       error = getErrorMessage(cause)
     }
+  }
+
+  function closeConfirmPopup() {
+    pendingDeleteDomain = ''
+    pendingDeleteEmail = null
   }
 
   function normalizeDomain(value: string) {
@@ -278,7 +318,7 @@
         {#each domains as domain}
           <span class="domain-chip">
             {domain}
-            <button type="button" aria-label={`${t.delete} ${domain}`} on:click={() => removeDomain(domain)}>x</button>
+            <button type="button" aria-label={`${t.delete} ${domain}`} on:click={() => requestRemoveDomain(domain)}>x</button>
           </span>
         {/each}
         <input
@@ -339,7 +379,7 @@
                 <button type="button" on:click={() => copyEmail(randomEmail)}>
                   {copiedEmailId === randomEmail.id ? t.copied : t.copyEmail}
                 </button>
-                <button type="button" class="danger-button" on:click={() => removeEmail(randomEmail)}>{t.delete}</button>
+                <button type="button" class="danger-button" on:click={() => requestRemoveEmail(randomEmail)}>{t.delete}</button>
               </div>
             </article>
           {/each}
@@ -351,6 +391,20 @@
     </section>
   </dialog>
 </div>
+
+{#if (pendingDeleteEmail || pendingDeleteDomain) && ConfirmPopupComponent}
+  <svelte:component
+    this={ConfirmPopupComponent}
+    title={pendingDeleteEmail ? t.deleteRandomEmailTitle : t.deleteRandomDomainTitle}
+    message={pendingDeleteEmail
+      ? `${t.deleteRandomEmailMessage} ${pendingDeleteEmail.email}`
+      : `${t.deleteRandomDomainMessage} ${pendingDeleteDomain}`}
+    confirmLabel={t.delete}
+    cancelLabel={t.cancel}
+    confirm={pendingDeleteEmail ? removePendingEmail : removePendingDomain}
+    close={closeConfirmPopup}
+  />
+{/if}
 
 <style>
   .settings-backdrop {
@@ -426,38 +480,65 @@
   .domain-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    min-height: 46px;
+    align-content: flex-start;
+    gap: 5px 6px;
+    min-height: 58px;
+    max-height: 96px;
     margin-top: 10px;
     border: 1px solid var(--line);
-    border-radius: 16px;
+    border-radius: 12px;
     background: rgba(18, 36, 59, 0.62);
-    padding: 8px;
+    overflow: auto;
+    padding: 6px;
+    scrollbar-color: rgba(147, 197, 253, 0.4) transparent;
+    scrollbar-width: thin;
     cursor: text;
+  }
+
+  .domain-tags::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .domain-tags::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .domain-tags::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(147, 197, 253, 0.4);
   }
 
   .domain-chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    border: 1px solid rgba(96, 165, 250, 0.45);
+    gap: 5px;
+    border: 1px solid rgba(96, 165, 250, 0.32);
     border-radius: 999px;
-    background: rgba(37, 99, 235, 0.24);
-    color: var(--heading);
-    font-size: 13px;
-    padding: 5px 8px 5px 10px;
+    background: rgba(96, 165, 250, 0.12);
+    color: #cfe3ff;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    padding: 3px 5px 3px 9px;
   }
 
   .domain-chip button {
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     border: 0;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    color: var(--heading);
+    background: rgba(147, 197, 253, 0.14);
+    color: #93c5fd;
     cursor: pointer;
+    font-size: 10px;
+    font-weight: 800;
     line-height: 1;
     padding: 0;
+  }
+
+  .domain-chip button:hover {
+    background: rgba(252, 165, 165, 0.18);
+    color: var(--danger);
   }
 
   .domain-tags input,
@@ -471,6 +552,7 @@
   .domain-tags input {
     flex: 1 1 180px;
     min-width: 120px;
+    height: 20px;
     border: 0;
     outline: 0;
     background: transparent;

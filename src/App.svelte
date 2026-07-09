@@ -9,6 +9,7 @@
   const translations = {
     en: {
       authChecking: 'Checking sign-in...',
+      cancel: 'Cancel',
       chatGroups: 'Message groups',
       chooseGroup: 'Choose a chat group to view messages.',
       copied: 'Copied',
@@ -22,6 +23,10 @@
       dataListHint: 'This list only loads push ids, from and recipients. It does not load `data` or `transcript`.',
       detailEmpty: 'Click a chat message to view the full content.',
       delete: 'Delete',
+      deleteRandomDomainMessage: 'This domain will be removed:',
+      deleteRandomDomainTitle: 'Delete random domain?',
+      deleteRandomEmailMessage: 'This email will be removed:',
+      deleteRandomEmailTitle: 'Delete random email?',
       downloadHtml: 'Download HTML',
       emailPrefix: 'Email prefix',
       emailPrefixPlaceholder: 'Optional prefix, leave empty for fully random',
@@ -75,6 +80,7 @@
     },
     vi: {
       authChecking: 'Đang kiểm tra đăng nhập...',
+      cancel: 'Hủy',
       chatGroups: 'Nhóm tin nhắn',
       chooseGroup: 'Chọn một nhóm chat để xem tin.',
       copied: 'Đã copy',
@@ -88,6 +94,10 @@
       dataListHint: 'Danh sách này chỉ lấy push id, from và recipients. Không tải `data` và `transcript`.',
       detailEmpty: 'Nhấn vào một tin chat để xem toàn bộ nội dung.',
       delete: 'Xóa',
+      deleteRandomDomainMessage: 'Domain này sẽ bị xóa:',
+      deleteRandomDomainTitle: 'Xóa random domain?',
+      deleteRandomEmailMessage: 'Email này sẽ bị xóa:',
+      deleteRandomEmailTitle: 'Xóa random email?',
       downloadHtml: 'Tải HTML',
       emailPrefix: 'Email prefix',
       emailPrefixPlaceholder: 'Prefix tùy chọn, bỏ trống để random hoàn toàn',
