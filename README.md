@@ -109,14 +109,17 @@ This project includes `database.rules.json`:
 
 ```json
 {
-  "rules": {
-    ".read": true,
+    "rules": {
+    ".read": "auth != null",
+    "messageCleanup": {
+      ".read": true
+    },
     ".write": true
   }
 }
 ```
 
-`read` is public so the Rust SMTP receiver can scan old records during cleanup. `write` is public so the Rust SMTP receiver can keep posting messages by URL. If you lock either rule down, make sure the Rust process has a valid Firebase Auth token or another server-side access strategy.
+Main database reads require a signed-in Firebase user. `messageCleanup` is public-read because it only stores cleanup timestamps and lets the Rust cleanup task scan expired records without reading message content. `write` is public so the Rust SMTP receiver can keep posting messages by URL. If you lock writes down, make sure the Rust process has a valid Firebase Auth token or another server-side access strategy.
 
 ### 4. Set Up Firebase Hosting
 

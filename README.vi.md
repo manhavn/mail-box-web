@@ -109,14 +109,17 @@ Project này có sẵn `database.rules.json`:
 
 ```json
 {
-  "rules": {
-    ".read": true,
+    "rules": {
+    ".read": "auth != null",
+    "messageCleanup": {
+      ".read": true
+    },
     ".write": true
   }
 }
 ```
 
-`read` đang public để Rust SMTP receiver có thể quét records cũ khi cleanup. `write` đang public để Rust SMTP receiver vẫn có thể post message bằng URL. Nếu bạn khóa một trong hai rule, hãy đảm bảo Rust process có Firebase Auth token hợp lệ hoặc dùng chiến lược truy cập server-side khác.
+Các node chính chỉ cho đọc khi user đã đăng nhập Firebase. `messageCleanup` được public-read vì chỉ chứa timestamp phục vụ cleanup, giúp Rust cleanup task quét records hết hạn mà không đọc nội dung message. `write` đang public để Rust SMTP receiver vẫn có thể post message bằng URL. Nếu bạn khóa write, hãy đảm bảo Rust process có Firebase Auth token hợp lệ hoặc dùng chiến lược truy cập server-side khác.
 
 ### 4. Thiết Lập Firebase Hosting
 
