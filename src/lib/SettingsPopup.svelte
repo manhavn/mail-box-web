@@ -363,6 +363,7 @@
                   </div>
                 {/each}
               </div>
+              <p class="mx-record-help">{t.randomDomainMxSubdomainRecordHelp}</p>
             {:else}
               <p>{t.randomDomainMxMissing}</p>
             {/if}
@@ -618,6 +619,12 @@
     font-size: 11px;
     padding: 7px 8px;
     white-space: nowrap;
+  }
+
+  .mx-tooltip .mx-record-help {
+    margin: 8px 0 0;
+    color: #b6c9e3;
+    font-size: 11px;
   }
 
   .settings-box,
