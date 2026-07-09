@@ -167,6 +167,20 @@ export async function listRandomEmails(userId: string, pageSize: number, beforeK
     .sort((a, b) => b.id.localeCompare(a.id))
 }
 
+export function watchRandomEmails(userId: string, pageSize: number, callback: (emails: RandomEmail[]) => void): Unsubscribe {
+  const emailRef = ref(database, `userData/${userId}/randomEmails`)
+  const emailQuery = query(emailRef, orderByKey(), limitToLast(pageSize))
+
+  return onValue(emailQuery, (snapshot) => {
+    const value = snapshot.val() as Record<string, Omit<RandomEmail, 'id'>> | null
+    callback(
+      Object.entries(value ?? {})
+        .map(([id, email]) => ({ id, ...email }))
+        .sort((a, b) => b.id.localeCompare(a.id)),
+    )
+  })
+}
+
 export async function searchRandomEmails(userId: string, searchTerm: string, pageSize: number) {
   const emailRef = ref(database, `userData/${userId}/randomEmails`)
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
@@ -183,6 +197,32 @@ export async function searchRandomEmails(userId: string, searchTerm: string, pag
   return Object.entries(value ?? {})
     .map(([id, email]) => ({ id, ...email }))
     .sort((a, b) => b.id.localeCompare(a.id))
+}
+
+export function watchSearchRandomEmails(
+  userId: string,
+  searchTerm: string,
+  pageSize: number,
+  callback: (emails: RandomEmail[]) => void,
+): Unsubscribe {
+  const emailRef = ref(database, `userData/${userId}/randomEmails`)
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+  const emailQuery = query(
+    emailRef,
+    orderByChild('email'),
+    startAt(normalizedSearchTerm),
+    endAt(`${normalizedSearchTerm}\uf8ff`),
+    limitToLast(pageSize),
+  )
+
+  return onValue(emailQuery, (snapshot) => {
+    const value = snapshot.val() as Record<string, Omit<RandomEmail, 'id'>> | null
+    callback(
+      Object.entries(value ?? {})
+        .map(([id, email]) => ({ id, ...email }))
+        .sort((a, b) => b.id.localeCompare(a.id)),
+    )
+  })
 }
 
 export async function createRandomEmail(userId: string, email: string, domain: string) {

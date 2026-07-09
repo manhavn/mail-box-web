@@ -4,12 +4,12 @@
   import {
     createRandomEmail,
     deleteRandomEmail,
-    listRandomEmails,
     saveEmailPrefix,
     saveRandomDomains,
-    searchRandomEmails,
     watchEmailPrefix,
+    watchRandomEmails,
     watchRandomDomains,
+    watchSearchRandomEmails,
     type RandomEmail,
   } from './firebase'
 
@@ -27,7 +27,9 @@
   let domainInput = ''
   let emailPrefix = ''
   let emailSearch = ''
+  let manualEmailInput = ''
   let randomEmails: RandomEmail[] = []
+  let visibleEmailLimit = PAGE_SIZE
   let pendingDeleteDomain = ''
   let pendingDeleteEmail: RandomEmail | null = null
   let ConfirmPopupComponent: any = null
@@ -37,18 +39,22 @@
   let hasMoreEmails = true
   let savingDomains = false
   let creatingEmail = false
+  let addingManualEmail = false
+  let savingManualEmail = false
   let copiedEmailId = ''
   let copiedMxRecord = ''
   let error = ''
   let unwatchDomains: (() => void) | null = null
   let unwatchEmailPrefix: (() => void) | null = null
-  let saveDomainsTimeout: ReturnType<typeof setTimeout> | null = null
+  let unwatchRandomEmails: (() => void) | null = null
   let saveEmailPrefixTimeout: ReturnType<typeof setTimeout> | null = null
   let searchEmailsTimeout: ReturnType<typeof setTimeout> | null = null
   let copiedEmailTimeout: ReturnType<typeof setTimeout> | null = null
   let mxCopiedTimeout: ReturnType<typeof setTimeout> | null = null
 
   $: canCreateRandomEmail = domains.length > 0 && !creatingEmail
+  $: normalizedManualEmail = normalizeManualEmail(manualEmailInput)
+  $: canSaveManualEmail = !!normalizedManualEmail && !savingManualEmail
 
   onMount(() => {
     unwatchDomains = watchRandomDomains(user.uid, (nextDomains) => {
@@ -57,54 +63,42 @@
     unwatchEmailPrefix = watchEmailPrefix(user.uid, (nextPrefix) => {
       emailPrefix = nextPrefix
     })
-    void loadInitialEmails()
+    watchInitialEmails()
   })
 
   onDestroy(() => {
     unwatchDomains?.()
     unwatchEmailPrefix?.()
-    if (saveDomainsTimeout) clearTimeout(saveDomainsTimeout)
+    unwatchRandomEmails?.()
     if (saveEmailPrefixTimeout) clearTimeout(saveEmailPrefixTimeout)
     if (searchEmailsTimeout) clearTimeout(searchEmailsTimeout)
     if (copiedEmailTimeout) clearTimeout(copiedEmailTimeout)
     if (mxCopiedTimeout) clearTimeout(mxCopiedTimeout)
   })
 
-  function addDomainFromInput() {
+  async function addDomainFromInput() {
     const domain = normalizeDomain(domainInput)
     if (!domain || domains.includes(domain)) {
       domainInput = ''
       return
     }
 
-    domains = [...domains, domain]
+    error = ''
+    savingDomains = true
     domainInput = ''
-    scheduleSaveDomains()
+
+    try {
+      await saveRandomDomains(user.uid, [...domains, domain])
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingDomains = false
+    }
   }
 
   async function requestRemoveDomain(domain: string) {
     pendingDeleteDomain = domain
     await loadConfirmPopup()
-  }
-
-  function scheduleSaveDomains() {
-    if (saveDomainsTimeout) clearTimeout(saveDomainsTimeout)
-    savingDomains = true
-    saveDomainsTimeout = setTimeout(() => {
-      void persistDomains()
-    }, 250)
-  }
-
-  async function persistDomains() {
-    error = ''
-    try {
-      await saveRandomDomains(user.uid, domains)
-    } catch (cause) {
-      error = getErrorMessage(cause)
-    } finally {
-      savingDomains = false
-      saveDomainsTimeout = null
-    }
   }
 
   function updateEmailPrefix(value: string) {
@@ -132,36 +126,39 @@
     }
   }
 
-  async function loadInitialEmails() {
+  function watchInitialEmails(showLoading = true) {
     error = ''
-    loadingEmails = true
+    if (showLoading) loadingEmails = true
     try {
       const searchTerm = emailSearch.trim()
-      randomEmails = searchTerm
-        ? await searchRandomEmails(user.uid, normalizeEmailSearch(searchTerm), PAGE_SIZE)
-        : await listRandomEmails(user.uid, PAGE_SIZE)
-      hasMoreEmails = !searchTerm && randomEmails.length === PAGE_SIZE
+      const pageSize = searchTerm ? PAGE_SIZE : visibleEmailLimit
+      unwatchRandomEmails?.()
+      unwatchRandomEmails = searchTerm
+        ? watchSearchRandomEmails(user.uid, normalizeEmailSearch(searchTerm), pageSize, updateWatchedEmails)
+        : watchRandomEmails(user.uid, pageSize, updateWatchedEmails)
+      hasMoreEmails = !searchTerm
     } catch (cause) {
       error = getErrorMessage(cause)
-    } finally {
       loadingEmails = false
+      loadingMoreEmails = false
+      unwatchRandomEmails = null
     }
   }
 
-  async function loadMoreEmails() {
+  function updateWatchedEmails(nextEmails: RandomEmail[]) {
+    randomEmails = nextEmails
+    hasMoreEmails = !emailSearch.trim() && nextEmails.length === visibleEmailLimit
+    loadingEmails = false
+    loadingMoreEmails = false
+  }
+
+  function loadMoreEmails() {
     if (emailSearch.trim() || loadingEmails || loadingMoreEmails || !hasMoreEmails || randomEmails.length === 0) return
 
     error = ''
     loadingMoreEmails = true
-    try {
-      const nextEmails = await listRandomEmails(user.uid, PAGE_SIZE, randomEmails[randomEmails.length - 1].id)
-      randomEmails = [...randomEmails, ...nextEmails]
-      hasMoreEmails = nextEmails.length === PAGE_SIZE
-    } catch (cause) {
-      error = getErrorMessage(cause)
-    } finally {
-      loadingMoreEmails = false
-    }
+    visibleEmailLimit += PAGE_SIZE
+    watchInitialEmails(false)
   }
 
   function handleEmailScroll(event: Event) {
@@ -173,9 +170,11 @@
 
   function updateEmailSearch(value: string) {
     emailSearch = value
+    visibleEmailLimit = PAGE_SIZE
     if (searchEmailsTimeout) clearTimeout(searchEmailsTimeout)
     searchEmailsTimeout = setTimeout(() => {
-      void loadInitialEmails()
+      watchInitialEmails()
+      searchEmailsTimeout = null
     }, 300)
   }
 
@@ -192,12 +191,30 @@
     creatingEmail = true
 
     try {
-      const randomEmail = await createRandomEmail(user.uid, email, domain)
-      randomEmails = [randomEmail, ...randomEmails]
+      await createRandomEmail(user.uid, email, domain)
     } catch (cause) {
       error = getErrorMessage(cause)
     } finally {
       creatingEmail = false
+    }
+  }
+
+  async function saveManualEmail() {
+    const email = normalizedManualEmail
+    if (!email || savingManualEmail) return
+
+    const domain = email.split('@')[1]
+    error = ''
+    savingManualEmail = true
+
+    try {
+      await createRandomEmail(user.uid, email, domain)
+      manualEmailInput = ''
+      addingManualEmail = false
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingManualEmail = false
     }
   }
 
@@ -245,11 +262,22 @@
     }
   }
 
-  function removePendingDomain() {
+  async function removePendingDomain() {
     if (!pendingDeleteDomain) return
-    domains = domains.filter((currentDomain) => currentDomain !== pendingDeleteDomain)
+
+    const nextDomains = domains.filter((currentDomain) => currentDomain !== pendingDeleteDomain)
+    error = ''
+    savingDomains = true
+
+    try {
+      await saveRandomDomains(user.uid, nextDomains)
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingDomains = false
+    }
+
     pendingDeleteDomain = ''
-    scheduleSaveDomains()
   }
 
   async function removePendingEmail() {
@@ -292,6 +320,12 @@
 
   function normalizeEmailSearch(value: string) {
     return value.trim().toLowerCase()
+  }
+
+  function normalizeManualEmail(value: string) {
+    const email = value.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return ''
+    return email
   }
 
   function createRandomLocalPart(prefix: string) {
@@ -391,10 +425,10 @@
           on:keydown={(event) => {
             if (event.key === 'Enter' || event.key === ',' || event.key === 'Tab') {
               event.preventDefault()
-              addDomainFromInput()
+              void addDomainFromInput()
             }
           }}
-          on:blur={addDomainFromInput}
+          on:blur={() => void addDomainFromInput()}
         />
       </div>
     </article>
@@ -423,8 +457,28 @@
           placeholder={t.searchEmail}
           on:input={(event) => updateEmailSearch(event.currentTarget.value)}
         />
-        <button type="button" class="ghost-button small" on:click={loadInitialEmails} disabled={loadingEmails}>{t.refresh}</button>
+        <button type="button" class="ghost-button small" on:click={() => (addingManualEmail = !addingManualEmail)}>
+          {t.addEmail}
+        </button>
       </div>
+
+      {#if addingManualEmail}
+        <form
+          class="manual-email-form"
+          on:submit|preventDefault={saveManualEmail}
+        >
+          <input
+            class="manual-email-input"
+            type="email"
+            bind:value={manualEmailInput}
+            placeholder={t.addEmailPlaceholder}
+            autocomplete="off"
+          />
+          <button type="submit" class="primary-button small" disabled={!canSaveManualEmail}>
+            {savingManualEmail ? t.saving : t.save}
+          </button>
+        </form>
+      {/if}
 
       {#if loadingEmails}
         <p class="muted">{t.loadingEmails}</p>
@@ -741,6 +795,7 @@
 
   .domain-tags input,
   .prefix-input,
+  .manual-email-input,
   .search-input {
     box-sizing: border-box;
     color: var(--text);
@@ -757,6 +812,7 @@
   }
 
   .prefix-input,
+  .manual-email-input,
   .search-input {
     width: 100%;
     border: 1px solid var(--line);
@@ -769,6 +825,17 @@
   .search-input {
     max-width: 280px;
     padding: 7px 10px;
+  }
+
+  .manual-email-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .manual-email-input {
+    flex: 1;
+    min-width: 0;
   }
 
   .primary-button,
@@ -786,6 +853,12 @@
   .primary-button {
     flex: 0 0 auto;
     min-height: 47px;
+  }
+
+  .primary-button.small {
+    min-height: 0;
+    padding: 7px 12px;
+    font-size: 12px;
   }
 
   .primary-button:disabled,
@@ -927,6 +1000,11 @@
 
     .random-email-actions {
       justify-content: flex-start;
+    }
+
+    .manual-email-form {
+      align-items: stretch;
+      flex-direction: column;
     }
   }
 </style>

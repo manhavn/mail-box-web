@@ -16,6 +16,8 @@ Vietnamese documentation: [README.vi.md](./README.vi.md)
 - Long database URLs and message addresses are available through hover titles.
 - Message list avoids loading `data` and `transcript`; full payload is loaded only after selecting one message.
 - Full message detail is displayed as text boxes.
+- Settings popup supports realtime random domains and random email aliases stored per signed-in user.
+- Random email aliases can be generated from configured domains or added manually, and the alias list updates in realtime.
 - EN/VI language switch with `localStorage` persistence. English is the default language.
 - Lazy-loaded inbox chunk so unauthenticated visitors do not download the whole inbox reader.
 - Separate Firebase SDK build chunk for better caching.
@@ -32,6 +34,16 @@ messages/{firebase-path}/{message-id}
 ```
 
 Each `firebase-path` is displayed as a message group. The full payload lives under `messages`, and the list view uses `messageSummaries` so it does not download `data` or `transcript`.
+
+The web app also stores signed-in user settings and random email aliases:
+
+```text
+settings/{user-id}/domains
+settings/{user-id}/emailPrefix
+userData/{user-id}/randomEmails/{email-id}
+```
+
+`settings/{user-id}/domains` and `userData/{user-id}/randomEmails` are watched with Realtime Database listeners, so changes made from another client appear in the settings popup without pressing refresh.
 
 Example full payload under `messages/{firebase-path}/{message-id}`:
 
