@@ -53,6 +53,7 @@ export type RandomEmail = {
   email: string
   domain: string
   created_at: string
+  label?: string
 }
 
 const database = getDatabase(app)
@@ -246,6 +247,10 @@ export async function createRandomEmail(userId: string, email: string, domain: s
 
   await set(emailRef, randomEmail)
   return { id: emailRef.key ?? '', ...randomEmail }
+}
+
+export async function updateRandomEmailLabel(userId: string, emailId: string, label: string) {
+  await set(ref(database, `userData/${userId}/randomEmails/${emailId}/label`), label.trim())
 }
 
 export async function deleteRandomEmail(userId: string, emailId: string) {

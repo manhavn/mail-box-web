@@ -6,6 +6,7 @@
     deleteRandomEmail,
     saveEmailPrefix,
     saveRandomDomains,
+    updateRandomEmailLabel,
     watchEmailPrefix,
     watchRandomEmails,
     watchRandomDomains,
@@ -41,6 +42,9 @@
   let creatingEmail = false
   let addingManualEmail = false
   let savingManualEmail = false
+  let editingEmailLabelId = ''
+  let emailLabelInput = ''
+  let savingEmailLabelId = ''
   let copiedEmailId = ''
   let copiedMxRecord = ''
   let error = ''
@@ -244,6 +248,30 @@
       copiedMxRecord = ''
       mxCopiedTimeout = null
     }, 1600)
+  }
+
+  function editEmailLabel(randomEmail: RandomEmail) {
+    editingEmailLabelId = randomEmail.id
+    emailLabelInput = randomEmail.label ?? ''
+  }
+
+  function cancelEmailLabelEdit() {
+    editingEmailLabelId = ''
+    emailLabelInput = ''
+  }
+
+  async function saveEmailLabel(randomEmail: RandomEmail) {
+    error = ''
+    savingEmailLabelId = randomEmail.id
+
+    try {
+      await updateRandomEmailLabel(user.uid, randomEmail.id, emailLabelInput)
+      cancelEmailLabelEdit()
+    } catch (cause) {
+      error = getErrorMessage(cause)
+    } finally {
+      savingEmailLabelId = ''
+    }
   }
 
   async function requestRemoveEmail(randomEmail: RandomEmail) {
@@ -494,10 +522,26 @@
           {#each randomEmails as randomEmail}
             <article class="random-email-item">
               <div>
+                {#if randomEmail.label}
+                  <span class="random-email-label">{randomEmail.label}</span>
+                {/if}
                 <strong>{randomEmail.email}</strong>
                 <span>{formatCreatedAt(randomEmail.created_at)}</span>
+                {#if editingEmailLabelId === randomEmail.id}
+                  <form class="email-label-form" on:submit|preventDefault={() => saveEmailLabel(randomEmail)}>
+                    <input
+                      class="email-label-input"
+                      bind:value={emailLabelInput}
+                      placeholder={t.randomEmailLabelPlaceholder}
+                      autocomplete="off"
+                    />
+                    <button type="submit" class="label-save-button" disabled={savingEmailLabelId === randomEmail.id}>{savingEmailLabelId === randomEmail.id ? t.saving : t.save}</button>
+                    <button type="button" class="ghost-button small" on:click={cancelEmailLabelEdit}>{t.cancel}</button>
+                  </form>
+                {/if}
               </div>
               <div class="random-email-actions">
+                <button type="button" on:click={() => editEmailLabel(randomEmail)}>{t.editLabel}</button>
                 <button type="button" on:click={() => copyEmail(randomEmail)}>
                   {copiedEmailId === randomEmail.id ? t.copied : t.copyEmail}
                 </button>
@@ -621,6 +665,11 @@
     font-size: 11px;
     font-weight: 800;
     line-height: 1;
+  }
+
+  .mx-help:hover {
+    background: rgba(96, 165, 250, 0.22);
+    color: var(--heading);
   }
 
   .mx-tooltip {
@@ -801,6 +850,7 @@
   .domain-tags input,
   .prefix-input,
   .manual-email-input,
+  .email-label-input,
   .search-input {
     box-sizing: border-box;
     color: var(--text);
@@ -818,6 +868,7 @@
 
   .prefix-input,
   .manual-email-input,
+  .email-label-input,
   .search-input {
     width: 100%;
     border: 1px solid var(--line);
@@ -845,6 +896,7 @@
 
   .primary-button,
   .ghost-button,
+  .email-label-form button,
   .random-email-actions button {
     border: 1px solid rgba(96, 165, 250, 0.55);
     border-radius: 999px;
@@ -879,6 +931,19 @@
   .ghost-button.small {
     padding: 5px 10px;
     font-size: 12px;
+  }
+
+  .primary-button:not(:disabled):hover,
+  .random-email-actions button:not(:disabled):hover,
+  .email-label-form button:not(:disabled):hover {
+    background: rgba(37, 99, 235, 0.36);
+    color: var(--heading);
+  }
+
+  .ghost-button:not(:disabled):hover,
+  .email-label-form .ghost-button:not(:disabled):hover {
+    background: rgba(37, 99, 235, 0.14);
+    color: var(--heading);
   }
 
   .random-email-panel {
@@ -939,21 +1004,62 @@
     font-size: 13px;
   }
 
+  .random-email-label {
+    margin: 0 0 5px;
+    color: var(--accent-strong);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
   .random-email-item span {
     margin-top: 4px;
     color: var(--muted);
     font-size: 12px;
   }
 
+  .email-label-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .email-label-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+  }
+
+  .email-label-form button,
   .random-email-actions button {
     padding: 5px 10px;
     font-size: 12px;
+  }
+
+  .label-save-button {
+    border-color: rgba(34, 197, 94, 0.42);
+    background: rgba(21, 128, 61, 0.28);
+    color: #bbf7d0;
+  }
+
+  .label-save-button:not(:disabled):hover {
+    background: rgba(22, 163, 74, 0.36);
+    color: #dcfce7;
+  }
+
+  .email-label-form .ghost-button {
+    background: transparent;
   }
 
   .random-email-actions .danger-button {
     border-color: rgba(252, 165, 165, 0.42);
     background: rgba(127, 29, 29, 0.24);
     color: var(--danger);
+  }
+
+  .random-email-actions .danger-button:not(:disabled):hover {
+    background: rgba(127, 29, 29, 0.38);
+    color: #fecaca;
   }
 
   .settings-alert {
@@ -1005,11 +1111,21 @@
 
     .random-email-actions {
       justify-content: flex-start;
+      flex-wrap: wrap;
     }
 
     .manual-email-form {
       align-items: stretch;
       flex-direction: column;
+    }
+
+    .email-label-form {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .email-label-form button {
+      width: 100%;
     }
   }
 </style>

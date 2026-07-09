@@ -33,6 +33,7 @@
       downloadHtml: 'Download HTML',
       emailPrefix: 'Email prefix',
       emailPrefixPlaceholder: 'Optional prefix, leave empty for fully random',
+      editLabel: 'Edit label',
       expand: 'Expand',
       firebaseAuthBlocked:
         'Firebase Auth is blocking client sign-in. Open Firebase Console > Authentication > Settings > User actions and enable Create (sign-up), then try Google sign-in again.',
@@ -53,6 +54,7 @@
       noRecipients: 'No recipients',
       noOtp: 'No OTP found',
       noRandomEmails: 'No random emails yet.',
+      randomEmailLabelPlaceholder: 'Label for this email',
       noRenderedContent: 'No rendered content found in this message.',
       notFound: 'This message was not found.',
       otpCode: 'OTP code',
@@ -118,6 +120,7 @@
       downloadHtml: 'Tải HTML',
       emailPrefix: 'Email prefix',
       emailPrefixPlaceholder: 'Prefix tùy chọn, bỏ trống để random hoàn toàn',
+      editLabel: 'Sửa nhãn',
       expand: 'Mở rộng',
       firebaseAuthBlocked:
         'Firebase Auth đang chặn đăng nhập từ client. Vào Firebase Console > Authentication > Settings > User actions và bật Create (sign-up), sau đó thử đăng nhập Google lại.',
@@ -138,6 +141,7 @@
       noRecipients: 'Không có người nhận',
       noOtp: 'Không tìm thấy OTP',
       noRandomEmails: 'Chưa có random email nào.',
+      randomEmailLabelPlaceholder: 'Nhãn cho email này',
       noRenderedContent: 'Không tìm thấy nội dung render trong tin này.',
       notFound: 'Không tìm thấy tin này.',
       otpCode: 'Mã OTP',
