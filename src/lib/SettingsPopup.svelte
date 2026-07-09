@@ -102,7 +102,11 @@
   }
 
   function updateEmailPrefix(value: string) {
-    emailPrefix = normalizeEmailPrefix(value)
+    emailPrefix = value
+  }
+
+  function saveNormalizedEmailPrefix() {
+    emailPrefix = normalizeEmailPrefix(emailPrefix)
     scheduleSaveEmailPrefix()
   }
 
@@ -441,6 +445,7 @@
           value={emailPrefix}
           placeholder={t.emailPrefixPlaceholder}
           on:input={(event) => updateEmailPrefix(event.currentTarget.value)}
+          on:blur={saveNormalizedEmailPrefix}
         />
       </label>
       <button type="button" class="primary-button" on:click={getRandomEmail} disabled={!canCreateRandomEmail}>

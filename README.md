@@ -18,6 +18,7 @@ Vietnamese documentation: [README.vi.md](./README.vi.md)
 - Full message detail is displayed as text boxes.
 - Settings popup supports realtime random domains and random email aliases stored per signed-in user.
 - Random email aliases can be generated from configured domains or added manually, and the alias list updates in realtime.
+- Settings inputs allow free typing and normalize restricted values only on blur or save, which keeps Vietnamese IME entry stable.
 - EN/VI language switch with `localStorage` persistence. English is the default language.
 - Lazy-loaded inbox chunk so unauthenticated visitors do not download the whole inbox reader.
 - Separate Firebase SDK build chunk for better caching.
