@@ -278,7 +278,7 @@
 
   function formatMessageTitle(id: string) {
     const summary = messageSummaries.find((message) => message.id === id)
-    return `${t.from}: ${summary?.from ?? t.unknownSender}\n${t.to}: ${formatRecipients(summary?.recipients)}`
+    return `${t.subject}: ${summary?.subject || id}\n${t.from}: ${summary?.from ?? t.unknownSender}\n${t.to}: ${formatRecipients(summary?.recipients)}`
   }
 
 </script>
@@ -338,7 +338,7 @@
             on:click={() => selectMessage(message.id)}
           >
             <span class="message-main">
-              <span class="message-id">{message.id}</span>
+              <span class="message-id" title={message.subject || message.id}>{message.subject || message.id}</span>
               <span class="message-time">{message.received_at ? new Date(message.received_at).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US') : formatPushTime(message.id)}</span>
             </span>
             <span class="message-addresses">
@@ -415,6 +415,15 @@
             </a>
           </div>
           <pre>{selectedMessage.peer_addr ?? t.unknownPeer}</pre>
+        </article>
+        <article class="text-box small">
+          <div class="text-box-heading">
+            <h3>{t.subject}</h3>
+            <a href="#copy-subject" on:click|preventDefault={() => copyTextBox('subject', selectedMessage?.subject || selectedMessage?.id || '')}>
+              {copiedField === 'subject' ? t.copied : t.copy}
+            </a>
+          </div>
+          <pre>{selectedMessage.subject || selectedMessage.id}</pre>
         </article>
         <article class="text-box small otp-box">
           <div class="text-box-heading">

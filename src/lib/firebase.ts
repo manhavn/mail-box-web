@@ -10,6 +10,7 @@ export type EmailMessage = {
   peer_addr?: string
   from?: string
   recipients?: string[]
+  subject?: string
   data?: string
   transcript?: string
   received_at?: string
@@ -27,6 +28,7 @@ export type MessageSummary = {
   id: string
   from?: string
   recipients?: string[]
+  subject?: string
   received_at?: string
 }
 
@@ -98,6 +100,7 @@ export function watchMessageSummaries(
         id,
         from: message?.from,
         recipients: message?.recipients,
+        subject: message?.subject,
         received_at: message?.received_at,
       }))
       .sort((a, b) => b.id.localeCompare(a.id))

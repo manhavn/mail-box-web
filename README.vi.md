@@ -40,6 +40,7 @@ Payload đầy đủ mẫu dưới `messages/{firebase-path}/{message-id}`:
   "peer_addr": "127.0.0.1:54321",
   "from": "sender@example.com",
   "recipients": ["receiver@example.com"],
+  "subject": "test",
   "data": "From: <sender@example.com>\nTo: <receiver@example.com>\nSubject: test\n\nHello\n",
   "transcript": "S: 220 mail-box ready\r\nC: EHLO localhost\r\n...",
   "received_at": "2026-07-08T12:00:00Z"
@@ -52,6 +53,7 @@ Summary mẫu dưới `messageSummaries/{firebase-path}/{message-id}`:
 {
   "from": "sender@example.com",
   "recipients": ["receiver@example.com"],
+  "subject": "test",
   "received_at": "2026-07-08T12:00:00Z"
 }
 ```
