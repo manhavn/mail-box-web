@@ -1,11 +1,26 @@
 import type { EmailMessage } from './firebase'
 
+type MessageFileNameOptions = {
+  message: EmailMessage
+  formatPushTime: (id: string) => string
+  formatRecipients: (recipients: unknown) => string
+  extension: string
+}
+
 type RenderedEmailDownloadOptions = {
   html: string
   text: string
   message: EmailMessage
   formatPushTime: (id: string) => string
   formatRecipients: (recipients: unknown) => string
+}
+
+type MessageTextDownloadOptions = {
+  content: string
+  message: EmailMessage
+  formatPushTime: (id: string) => string
+  formatRecipients: (recipients: unknown) => string
+  extension: 'data.txt' | 'transcript.txt'
 }
 
 export function getRenderedEmailDocument(html: string, text: string) {
@@ -36,25 +51,48 @@ export function downloadRenderedEmailHtml({
   formatRecipients,
 }: RenderedEmailDownloadOptions) {
   const document = getRenderedEmailDocument(html, text)
-  const blob = new Blob([document], { type: 'text/html;charset=utf-8' })
+  downloadBlob(
+    document,
+    'text/html;charset=utf-8',
+    getMessageFileName({ message, formatPushTime, formatRecipients, extension: 'html' }),
+  )
+}
+
+export function downloadMessageText({
+  content,
+  message,
+  formatPushTime,
+  formatRecipients,
+  extension,
+}: MessageTextDownloadOptions) {
+  downloadBlob(
+    content,
+    'text/plain;charset=utf-8',
+    getMessageFileName({ message, formatPushTime, formatRecipients, extension }),
+  )
+}
+
+function downloadBlob(content: string, type: string, fileName: string) {
+  const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)
   const link = window.document.createElement('a')
   link.href = url
-  link.download = getRenderedEmailFileName(message, formatPushTime, formatRecipients)
+  link.download = fileName
   link.click()
   URL.revokeObjectURL(url)
 }
 
-function getRenderedEmailFileName(
-  message: EmailMessage,
-  formatPushTime: (id: string) => string,
-  formatRecipients: (recipients: unknown) => string,
-) {
+function getMessageFileName({
+  message,
+  formatPushTime,
+  formatRecipients,
+  extension,
+}: MessageFileNameOptions) {
   const from = message.from ?? 'unknown-sender'
   const to = formatRecipients(message.recipients)
   const receivedAt = message.received_at ?? formatPushTime(message.id)
 
-  return `${sanitizeFilePart(from)}-${sanitizeFilePart(to)}-${sanitizeFilePart(receivedAt)}.html`
+  return `${sanitizeFilePart(from)}-${sanitizeFilePart(to)}-${sanitizeFilePart(receivedAt)}.${extension}`
 }
 
 function sanitizeFilePart(value: string) {

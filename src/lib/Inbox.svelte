@@ -8,7 +8,11 @@
     watchGroups,
     watchMessageSummaries,
   } from './firebase'
-  import { downloadRenderedEmailHtml, getRenderedEmailDocument } from './rendered-email'
+  import {
+    downloadMessageText,
+    downloadRenderedEmailHtml,
+    getRenderedEmailDocument,
+  } from './rendered-email'
 
   // oxlint-disable-next-line no-unassigned-vars
   export let language: 'en' | 'vi'
@@ -185,6 +189,28 @@
       message: selectedMessage,
       formatPushTime,
       formatRecipients,
+    })
+  }
+
+  function downloadMessageData() {
+    if (!selectedMessage?.data) return
+    downloadMessageText({
+      content: selectedMessage.data,
+      message: selectedMessage,
+      formatPushTime,
+      formatRecipients,
+      extension: 'data.txt',
+    })
+  }
+
+  function downloadMessageTranscript() {
+    if (!selectedMessage?.transcript) return
+    downloadMessageText({
+      content: selectedMessage.transcript,
+      message: selectedMessage,
+      formatPushTime,
+      formatRecipients,
+      extension: 'transcript.txt',
     })
   }
 
@@ -482,18 +508,48 @@
         <article class="text-box wide">
           <div class="text-box-heading">
             <h3>{t.data}</h3>
-            <a href="#data" on:click|preventDefault={() => (dataExpanded = !dataExpanded)}>
-              {dataExpanded ? t.collapse : t.expand}
-            </a>
+            <div class="text-box-actions">
+              {#if selectedMessage.data}
+                <a
+                  class="icon-link"
+                  href="#download-data"
+                  title={t.downloadData}
+                  aria-label={t.downloadData}
+                  on:click|preventDefault={downloadMessageData}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <path d="M10 2.5a.75.75 0 0 1 .75.75v8.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.25A.75.75 0 0 1 10 2.5Zm-5 12a.75.75 0 0 1 .75.75v1h8.5v-1a.75.75 0 0 1 1.5 0V17a.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75v-1.75A.75.75 0 0 1 5 14.5Z" />
+                  </svg>
+                </a>
+              {/if}
+              <a href="#data" on:click|preventDefault={() => (dataExpanded = !dataExpanded)}>
+                {dataExpanded ? t.collapse : t.expand}
+              </a>
+            </div>
           </div>
           <pre class:collapsed-preview={!dataExpanded}>{selectedMessage.data ?? ''}</pre>
         </article>
         <article class="text-box wide">
           <div class="text-box-heading">
             <h3>{t.transcript}</h3>
-            <a href="#transcript" on:click|preventDefault={() => (transcriptExpanded = !transcriptExpanded)}>
-              {transcriptExpanded ? t.collapse : t.expand}
-            </a>
+            <div class="text-box-actions">
+              {#if selectedMessage.transcript}
+                <a
+                  class="icon-link"
+                  href="#download-transcript"
+                  title={t.downloadTranscript}
+                  aria-label={t.downloadTranscript}
+                  on:click|preventDefault={downloadMessageTranscript}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <path d="M10 2.5a.75.75 0 0 1 .75.75v8.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.25A.75.75 0 0 1 10 2.5Zm-5 12a.75.75 0 0 1 .75.75v1h8.5v-1a.75.75 0 0 1 1.5 0V17a.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75v-1.75A.75.75 0 0 1 5 14.5Z" />
+                  </svg>
+                </a>
+              {/if}
+              <a href="#transcript" on:click|preventDefault={() => (transcriptExpanded = !transcriptExpanded)}>
+                {transcriptExpanded ? t.collapse : t.expand}
+              </a>
+            </div>
           </div>
           <pre class:collapsed-preview={!transcriptExpanded}>{selectedMessage.transcript ?? ''}</pre>
         </article>
