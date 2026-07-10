@@ -485,7 +485,7 @@
           >
             <span class="group-name">{group.id}</span>
             <span class="group-count">
-              {group.count}<span class="group-count-label"> {t.groupCount}</span>
+              {group.count}<span class="group-count-label">&nbsp;{t.groupCount}</span>
             </span>
           </button>
         {/each}

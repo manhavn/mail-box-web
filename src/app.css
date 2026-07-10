@@ -263,7 +263,7 @@ h3 {
 .layout {
   display: grid;
   grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.1fr) minmax(360px, 2fr);
-  align-items: start;
+  align-items: stretch;
   gap: 16px;
   min-height: 0;
   flex: 1;
@@ -280,20 +280,20 @@ h3 {
   background: rgba(14, 26, 43, 0.82);
   box-shadow: var(--shadow);
   padding: 16px;
+  box-sizing: border-box;
   backdrop-filter: blur(18px);
 }
 
 .groups-panel,
 .messages-panel {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
-  position: sticky;
-  top: 28px;
-  height: calc(100vh - 56px);
-  max-height: calc(100vh - 56px);
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
-  box-sizing: border-box;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .groups-panel {
@@ -379,10 +379,10 @@ h3 {
 .group-list,
 .message-list {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 8px;
-  min-height: 0;
+  max-height: 280px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -414,6 +414,35 @@ h3 {
 .groups-panel > .muted,
 .messages-panel > .muted {
   flex: 0 0 auto;
+}
+
+/* Sticky full-height side panels only on wide desktop layouts. */
+@media (min-width: 1101px) {
+  .layout {
+    --desktop-panel-height: calc(100vh - 56px);
+    align-items: start;
+  }
+
+  .groups-panel,
+  .messages-panel {
+    position: sticky;
+    top: 28px;
+    width: auto;
+    height: var(--desktop-panel-height);
+    max-height: var(--desktop-panel-height);
+    overflow: hidden;
+  }
+
+  .detail-panel {
+    min-height: var(--desktop-panel-height);
+  }
+
+  .group-list,
+  .message-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .group-list button,
@@ -699,12 +728,20 @@ pre.collapsed-preview {
     grid-template-columns: 64px minmax(260px, 1fr);
   }
 
-  /* Detail sits below; keep side panels compact instead of sticky full-height. */
+  /* Hard-reset desktop sticky sizing for tablet/mobile. */
   .groups-panel,
   .messages-panel {
     position: static;
+    top: auto;
     height: auto;
-    max-height: min(420px, 50vh);
+    max-height: none;
+    overflow: visible;
+  }
+
+  .group-list,
+  .message-list {
+    flex: 0 1 auto;
+    max-height: 280px;
   }
 
   .detail-panel {
@@ -758,12 +795,8 @@ pre.collapsed-preview {
     box-sizing: border-box;
   }
 
-  .groups-panel,
-  .messages-panel {
-    position: static;
-    height: auto;
-    max-height: none;
-    overflow: visible;
+  .layout {
+    align-items: stretch;
   }
 
   /* Never collapse groups panel on mobile. */
@@ -795,7 +828,9 @@ pre.collapsed-preview {
 
   .groups-panel.collapsed .group-list button {
     display: block;
+    width: 100%;
     padding: 12px;
+    text-align: left;
   }
 
   .groups-panel.collapsed .group-count {
@@ -806,12 +841,6 @@ pre.collapsed-preview {
 
   .panel-heading button.panel-toggle {
     display: none;
-  }
-
-  .group-list,
-  .message-list {
-    flex: none;
-    max-height: 280px;
   }
 
   .detail-grid {
