@@ -19,6 +19,8 @@
   // oxlint-disable-next-line no-unassigned-vars
   export let t: Record<string, string>
 
+  const GROUPS_PANEL_COLLAPSED_KEY = 'mailbox-groups-panel-collapsed'
+
   let groups: Array<{ id: string; count: number }> = []
   let selectedGroup = ''
   let messageSummaries: MessageSummary[] = []
@@ -37,11 +39,14 @@
   let EmailFullscreenComponent: any = null
   let loadingEmailFullscreen = false
   let otpCode = ''
+  let fromDisplayName = ''
+  let toDisplayName = ''
   let otpCopied = false
   let copiedField = ''
   let otpCopiedTimeout: ReturnType<typeof setTimeout> | null = null
   let copiedFieldTimeout: ReturnType<typeof setTimeout> | null = null
   let error = ''
+  let groupsPanelCollapsed = readGroupsPanelCollapsed()
   let unwatchGroups: (() => void) | null = null
   let unwatchMessages: (() => void) | null = null
 
@@ -142,6 +147,8 @@
     parsedEmailError = ''
     renderedEmailFullscreen = false
     otpCode = ''
+    fromDisplayName = ''
+    toDisplayName = ''
     otpCopied = false
     copiedField = ''
     if (otpCopiedTimeout) {
@@ -227,7 +234,12 @@
   }
 
   async function parseSelectedMessageData() {
-    const data = selectedMessage?.data
+    const message = selectedMessage
+    const data = message?.data
+    if (!message) return
+
+    // Fill names immediately so the box is ready even before MIME parse finishes.
+    setDisplayNames(extractMessageDisplayNames(message))
     if (!data?.trim()) return
 
     loadingParsedEmail = true
@@ -243,12 +255,33 @@
       parsedEmailText = parsed.text ?? ''
       const renderedText = stripHtml(parsedEmailHtml)
       otpCode = extractOtpCode([renderedText, parsedEmailText, parsed.subject])
+      setDisplayNames(
+        extractMessageDisplayNames(message, {
+          from: getAddressDisplayName(parsed.from),
+          to: getAddressDisplayName(parsed.to),
+        }),
+      )
     } catch (cause) {
       parsedEmailError = getErrorMessage(cause)
       otpCode = extractOtpCode([data])
+      setDisplayNames(extractMessageDisplayNames(message))
     } finally {
       loadingParsedEmail = false
     }
+  }
+
+  function setDisplayNames(names: { fromName: string; toName: string }) {
+    fromDisplayName = names.fromName
+    toDisplayName = names.toName
+  }
+
+  function formatDisplayNamesForCopy() {
+    return [
+      fromDisplayName ? `${t.from}: ${fromDisplayName}` : '',
+      toDisplayName ? `${t.to}: ${toDisplayName}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
   }
 
   function stripHtml(html: string) {
@@ -313,16 +346,128 @@
     return `${t.subject}: ${summary?.subject || id}\n${t.from}: ${summary?.from ?? t.unknownSender}\n${t.to}: ${formatRecipients(summary?.recipients)}`
   }
 
+  function formatGroupTitle(group: { id: string; count: number }) {
+    return `${group.id}\n${group.count} ${t.groupCount}`
+  }
+
+  function readGroupsPanelCollapsed() {
+    try {
+      return localStorage.getItem(GROUPS_PANEL_COLLAPSED_KEY) === 'true'
+    } catch {
+      return false
+    }
+  }
+
+  function setGroupsPanelCollapsed(next: boolean) {
+    groupsPanelCollapsed = next
+    try {
+      localStorage.setItem(GROUPS_PANEL_COLLAPSED_KEY, String(next))
+    } catch {
+      // Ignore storage write failures (private mode, quota, etc).
+    }
+  }
+
+  function normalizeDisplayName(name: string) {
+    const value = name.trim().replace(/^["']|["']$/g, '')
+    if (!value || value.includes('@')) return ''
+    // Ignore accidental header prefixes if a full line was passed in.
+    if (/^(from|to)\s*:/i.test(value)) return ''
+    return value
+  }
+
+  function extractDisplayNameFromAddress(address: string) {
+    const value = address.trim()
+    if (!value) return ''
+
+    // "Display Name" <email@x.com> or Display Name <email@x.com>
+    const angleMatch = value.match(/^(?:"([^"]+)"|([^<]+?))\s*<[^<>\s]+@[^<>\s]+>\s*$/)
+    if (!angleMatch) return ''
+
+    return normalizeDisplayName(angleMatch[1] ?? angleMatch[2] ?? '')
+  }
+
+  function extractDisplayNamesFromHeaderValue(value: string) {
+    const names: string[] = []
+    const pattern = /(?:"([^"]+)"|([^,<]+?))\s*<[^<>\s]+@[^<>\s]+>/g
+    for (const match of value.matchAll(pattern)) {
+      const name = normalizeDisplayName(match[1] ?? match[2] ?? '')
+      if (name) names.push(name)
+    }
+    return names
+  }
+
+  function extractHeaderValue(data: string, header: 'From' | 'To') {
+    // Include folded header continuation lines (leading space/tab on next line).
+    const match = data.match(new RegExp(`^${header}:\\s*([^\\r\\n]*(?:\\r?\\n[ \\t]+[^\\r\\n]*)*)`, 'im'))
+    return match?.[1]?.replace(/\r?\n[ \t]+/g, ' ').trim() ?? ''
+  }
+
+  function getAddressDisplayName(address: unknown): string {
+    if (!address) return ''
+
+    const names: string[] = []
+    const entries = Array.isArray(address) ? address : [address]
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object') continue
+      const record = entry as { name?: string; group?: Array<{ name?: string }> }
+      if (Array.isArray(record.group)) {
+        for (const mailbox of record.group) {
+          const groupName = normalizeDisplayName(mailbox?.name ?? '')
+          if (groupName) names.push(groupName)
+        }
+        continue
+      }
+      const name = normalizeDisplayName(record.name ?? '')
+      if (name) names.push(name)
+    }
+    return [...new Set(names)].join(', ')
+  }
+
+  function firstNonEmpty(...values: Array<string | undefined>) {
+    return values.map((value) => value?.trim() ?? '').find(Boolean) ?? ''
+  }
+
+  function extractMessageDisplayNames(
+    message: EmailMessage,
+    parsedNames: { from?: string; to?: string } = {},
+  ) {
+    const fromName = firstNonEmpty(
+      parsedNames.from,
+      extractDisplayNameFromAddress(message.from ?? ''),
+      ...extractDisplayNamesFromHeaderValue(extractHeaderValue(message.data ?? '', 'From')),
+    )
+
+    const toName = firstNonEmpty(
+      parsedNames.to,
+      ...(Array.isArray(message.recipients)
+        ? message.recipients.map((recipient) => extractDisplayNameFromAddress(String(recipient)))
+        : []),
+      ...extractDisplayNamesFromHeaderValue(extractHeaderValue(message.data ?? '', 'To')),
+    )
+
+    return { fromName, toName }
+  }
+
 </script>
 
 {#if error}
   <section class="alert">{error}</section>
 {/if}
 
-<section class="layout">
-  <aside class="panel groups-panel" aria-label="Chat groups">
+<section class="layout" class:groups-collapsed={groupsPanelCollapsed}>
+  <aside class="panel groups-panel" class:collapsed={groupsPanelCollapsed} aria-label="Chat groups">
     <div class="panel-heading">
       <h2>{t.chatGroups}</h2>
+      <button
+        type="button"
+        class="panel-toggle"
+        title={groupsPanelCollapsed ? t.expand : t.collapse}
+        aria-label={groupsPanelCollapsed ? t.expand : t.collapse}
+        aria-expanded={!groupsPanelCollapsed}
+        on:click={() => setGroupsPanelCollapsed(!groupsPanelCollapsed)}
+      >
+        {groupsPanelCollapsed ? '»' : '«'}
+      </button>
     </div>
 
     {#if loadingGroups}
@@ -335,10 +480,13 @@
           <button
             type="button"
             class:active={group.id === selectedGroup}
+            title={formatGroupTitle(group)}
             on:click={() => selectGroup(group.id)}
           >
             <span class="group-name">{group.id}</span>
-            <span class="group-count">{group.count} {t.groupCount}</span>
+            <span class="group-count">
+              {group.count}<span class="group-count-label"> {t.groupCount}</span>
+            </span>
           </button>
         {/each}
       </div>
@@ -346,11 +494,8 @@
   </aside>
 
   <section class="panel messages-panel" aria-label="Messages">
-    <div class="panel-heading">
-      <div>
-        <h2>{selectedGroup || t.messages}</h2>
-        <p class="muted">{t.dataListHint}</p>
-      </div>
+    <div class="panel-heading" title={t.dataListHint}>
+      <h2>{selectedGroup || t.messages}</h2>
     </div>
 
     {#if loadingMessages}
@@ -466,6 +611,37 @@
             {/if}
           </div>
           <pre class:empty-otp={!otpCode}>{otpCode || t.noOtp}</pre>
+        </article>
+        <article class="text-box small name-box">
+          <div class="text-box-heading">
+            <h3>{t.displayName}</h3>
+            {#if fromDisplayName || toDisplayName}
+              <a
+                href="#copy-display-name"
+                on:click|preventDefault={() => copyTextBox('displayName', formatDisplayNamesForCopy())}
+              >
+                {copiedField === 'displayName' ? t.copied : t.copy}
+              </a>
+            {/if}
+          </div>
+          {#if fromDisplayName || toDisplayName}
+            <div class="name-lines">
+              {#if fromDisplayName}
+                <div class="name-line" title={`${t.from}: ${fromDisplayName}`}>
+                  <span class="name-label">{t.from}:</span>
+                  <span class="name-value">{fromDisplayName}</span>
+                </div>
+              {/if}
+              {#if toDisplayName}
+                <div class="name-line" title={`${t.to}: ${toDisplayName}`}>
+                  <span class="name-label">{t.to}:</span>
+                  <span class="name-value">{toDisplayName}</span>
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <pre class="empty-name">{t.noDisplayName}</pre>
+          {/if}
         </article>
         <article class="text-box wide rendered-email-box">
           <div class="text-box-heading">
