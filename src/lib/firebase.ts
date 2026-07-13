@@ -14,6 +14,7 @@ import {
   set,
   startAt,
   endAt,
+  update,
   type Unsubscribe,
 } from 'firebase/database'
 import { app } from './firebase-app'
@@ -54,6 +55,7 @@ export type RandomEmail = {
   domain: string
   created_at: string
   label?: string
+  order?: number
 }
 
 const database = getDatabase(app)
@@ -80,6 +82,15 @@ function getRecordTime(value: string | undefined, id: string) {
 function compareByTimeDesc(a: { id: string }, b: { id: string }, getTimeValue: (item: { id: string }) => string | undefined) {
   const timeDelta = getRecordTime(getTimeValue(b), b.id) - getRecordTime(getTimeValue(a), a.id)
   return timeDelta || b.id.localeCompare(a.id)
+}
+
+export function sortRandomEmails(a: RandomEmail, b: RandomEmail) {
+  const aOrder = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER
+  const bOrder = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER
+  if (aOrder !== bOrder) {
+    return aOrder - bOrder
+  }
+  return compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at)
 }
 
 export async function listGroups() {
@@ -176,7 +187,7 @@ export async function listRandomEmails(userId: string, pageSize: number, beforeK
 
   return Object.entries(value ?? {})
     .map(([id, email]) => ({ id, ...email }))
-    .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at))
+    .sort(sortRandomEmails)
 }
 
 export function watchRandomEmails(userId: string, pageSize: number, callback: (emails: RandomEmail[]) => void): Unsubscribe {
@@ -188,7 +199,7 @@ export function watchRandomEmails(userId: string, pageSize: number, callback: (e
     callback(
       Object.entries(value ?? {})
         .map(([id, email]) => ({ id, ...email }))
-        .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at)),
+        .sort(sortRandomEmails),
     )
   })
 }
@@ -208,7 +219,7 @@ export async function searchRandomEmails(userId: string, searchTerm: string, pag
 
   return Object.entries(value ?? {})
     .map(([id, email]) => ({ id, ...email }))
-    .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at))
+    .sort(sortRandomEmails)
 }
 
 export function watchSearchRandomEmails(
@@ -232,17 +243,18 @@ export function watchSearchRandomEmails(
     callback(
       Object.entries(value ?? {})
         .map(([id, email]) => ({ id, ...email }))
-        .sort((a, b) => compareByTimeDesc(a, b, (email) => (email as RandomEmail).created_at)),
+        .sort(sortRandomEmails),
     )
   })
 }
 
-export async function createRandomEmail(userId: string, email: string, domain: string) {
+export async function createRandomEmail(userId: string, email: string, domain: string, order?: number) {
   const emailRef = push(ref(database, `userData/${userId}/randomEmails`))
   const randomEmail: Omit<RandomEmail, 'id'> = {
     email,
     domain,
     created_at: new Date().toISOString(),
+    ...(order !== undefined ? { order } : {}),
   }
 
   await set(emailRef, randomEmail)
@@ -255,6 +267,14 @@ export async function updateRandomEmailLabel(userId: string, emailId: string, la
 
 export async function deleteRandomEmail(userId: string, emailId: string) {
   await remove(ref(database, `userData/${userId}/randomEmails/${emailId}`))
+}
+
+export async function updateRandomEmailsOrder(userId: string, emailOrders: { id: string; order: number }[]) {
+  const updates: Record<string, any> = {}
+  for (const { id, order } of emailOrders) {
+    updates[`userData/${userId}/randomEmails/${id}/order`] = order
+  }
+  await update(ref(database), updates)
 }
 
 async function request<T>(path: string, params: Record<string, string> = {}) {

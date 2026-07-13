@@ -11,6 +11,7 @@
     watchRandomEmails,
     watchRandomDomains,
     watchSearchRandomEmails,
+    updateRandomEmailsOrder,
     type RandomEmail,
   } from './firebase'
 
@@ -199,7 +200,11 @@
     creatingEmail = true
 
     try {
-      await createRandomEmail(user.uid, email, domain)
+      const minOrder = randomEmails.length > 0
+        ? Math.min(...randomEmails.map(e => e.order !== undefined ? e.order : 0))
+        : 0
+      const newOrder = minOrder - 1
+      await createRandomEmail(user.uid, email, domain, newOrder)
     } catch (cause) {
       error = getErrorMessage(cause)
     } finally {
@@ -216,13 +221,39 @@
     savingManualEmail = true
 
     try {
-      await createRandomEmail(user.uid, email, domain)
+      const minOrder = randomEmails.length > 0
+        ? Math.min(...randomEmails.map(e => e.order !== undefined ? e.order : 0))
+        : 0
+      const newOrder = minOrder - 1
+      await createRandomEmail(user.uid, email, domain, newOrder)
       manualEmailInput = ''
       addingManualEmail = false
     } catch (cause) {
       error = getErrorMessage(cause)
     } finally {
       savingManualEmail = false
+    }
+  }
+
+  async function moveEmail(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= randomEmails.length) return
+
+    const nextEmails = [...randomEmails]
+    const temp = nextEmails[index]
+    nextEmails[index] = nextEmails[targetIndex]
+    nextEmails[targetIndex] = temp
+
+    const emailOrders = nextEmails.map((email, idx) => ({
+      id: email.id,
+      order: idx,
+    }))
+
+    error = ''
+    try {
+      await updateRandomEmailsOrder(user.uid, emailOrders)
+    } catch (cause) {
+      error = getErrorMessage(cause)
     }
   }
 
@@ -519,9 +550,33 @@
         <p class="muted">{t.noRandomEmails}</p>
       {:else}
         <div class="random-email-list" on:scroll={handleEmailScroll}>
-          {#each randomEmails as randomEmail}
+          {#each randomEmails as randomEmail, index}
             <article class="random-email-item">
-              <div>
+              <div class="reorder-actions">
+                <button
+                  type="button"
+                  class="icon-button"
+                  title={t.moveUp}
+                  disabled={index === 0}
+                  on:click={() => moveEmail(index, 'up')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m18 15-6-6-6 6"/>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  title={t.moveDown}
+                  disabled={index === randomEmails.length - 1}
+                  on:click={() => moveEmail(index, 'down')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="random-email-info">
                 {#if randomEmail.label}
                   <span class="random-email-label">{randomEmail.label}</span>
                 {/if}
@@ -541,11 +596,47 @@
                 {/if}
               </div>
               <div class="random-email-actions">
-                <button type="button" on:click={() => editEmailLabel(randomEmail)}>{t.editLabel}</button>
-                <button type="button" on:click={() => copyEmail(randomEmail)}>
-                  {copiedEmailId === randomEmail.id ? t.copied : t.copyEmail}
+                <button
+                  type="button"
+                  class="icon-button"
+                  title={t.editLabel}
+                  on:click={() => editEmailLabel(randomEmail)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                  </svg>
                 </button>
-                <button type="button" class="danger-button" on:click={() => requestRemoveEmail(randomEmail)}>{t.delete}</button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  class:success={copiedEmailId === randomEmail.id}
+                  title={copiedEmailId === randomEmail.id ? t.copied : t.copyEmail}
+                  on:click={() => copyEmail(randomEmail)}
+                >
+                  {#if copiedEmailId === randomEmail.id}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                  {:else}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                    </svg>
+                  {/if}
+                </button>
+                <button
+                  type="button"
+                  class="icon-button danger"
+                  title={t.delete}
+                  on:click={() => requestRemoveEmail(randomEmail)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  </svg>
+                </button>
               </div>
             </article>
           {/each}
@@ -600,12 +691,17 @@
   }
 
   .settings-header,
-  .settings-box-heading,
-  .random-email-actions {
+  .settings-box-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .random-email-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .settings-box-heading span {
@@ -896,8 +992,7 @@
 
   .primary-button,
   .ghost-button,
-  .email-label-form button,
-  .random-email-actions button {
+  .email-label-form button {
     border: 1px solid rgba(96, 165, 250, 0.55);
     border-radius: 999px;
     background: rgba(37, 99, 235, 0.24);
@@ -934,7 +1029,6 @@
   }
 
   .primary-button:not(:disabled):hover,
-  .random-email-actions button:not(:disabled):hover,
   .email-label-form button:not(:disabled):hover {
     background: rgba(37, 99, 235, 0.36);
     color: var(--heading);
@@ -981,7 +1075,7 @@
 
   .random-email-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     border: 1px solid var(--line);
@@ -990,15 +1084,19 @@
     padding: 12px;
   }
 
-  .random-email-item strong,
-  .random-email-item span {
+  .random-email-info {
+    min-width: 0;
+  }
+
+  .random-email-info strong,
+  .random-email-info span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .random-email-item strong {
+  .random-email-info strong {
     color: var(--heading);
     font-family: var(--mono);
     font-size: 13px;
@@ -1011,7 +1109,7 @@
     font-weight: 800;
   }
 
-  .random-email-item span {
+  .random-email-info span {
     margin-top: 4px;
     color: var(--muted);
     font-size: 12px;
@@ -1030,8 +1128,7 @@
     padding: 7px 10px;
   }
 
-  .email-label-form button,
-  .random-email-actions button {
+  .email-label-form button {
     padding: 5px 10px;
     font-size: 12px;
   }
@@ -1051,15 +1148,85 @@
     background: transparent;
   }
 
-  .random-email-actions .danger-button {
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.16);
+    color: var(--heading);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.2s ease;
+  }
+
+  .icon-button:hover:not(:disabled) {
+    background: rgba(37, 99, 235, 0.36);
+    border-color: rgba(96, 165, 250, 0.65);
+    transform: translateY(-1px);
+  }
+
+  .icon-button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .icon-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: rgba(96, 165, 250, 0.15);
+    background: rgba(37, 99, 235, 0.05);
+  }
+
+  .icon-button.danger {
     border-color: rgba(252, 165, 165, 0.42);
-    background: rgba(127, 29, 29, 0.24);
+    background: rgba(127, 29, 29, 0.2);
     color: var(--danger);
   }
 
-  .random-email-actions .danger-button:not(:disabled):hover {
+  .icon-button.danger:hover:not(:disabled) {
     background: rgba(127, 29, 29, 0.38);
+    border-color: rgba(252, 165, 165, 0.65);
     color: #fecaca;
+  }
+
+  .icon-button.success {
+    border-color: rgba(34, 197, 94, 0.42);
+    background: rgba(21, 128, 61, 0.2);
+    color: #bbf7d0;
+  }
+
+  .icon-button.success:hover:not(:disabled) {
+    background: rgba(22, 163, 74, 0.36);
+    border-color: rgba(34, 197, 94, 0.65);
+    color: #dcfce7;
+  }
+
+  .reorder-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .reorder-actions .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .icon-button svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+  }
+
+  .reorder-actions .icon-button svg {
+    width: 14px;
+    height: 14px;
   }
 
   .settings-alert {
@@ -1091,7 +1258,23 @@
     }
 
     .random-email-item {
-      grid-template-columns: 1fr;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px 12px;
+    }
+
+    .reorder-actions {
+      grid-row: span 2;
+      align-self: center;
+    }
+
+    .random-email-info {
+      grid-column: 2;
+    }
+
+    .random-email-actions {
+      grid-column: 2;
+      justify-content: flex-start;
+      gap: 8px;
     }
 
     .random-email-panel .settings-box-heading {
@@ -1107,11 +1290,6 @@
       flex: 1 1 0;
       max-width: none;
       min-width: 0;
-    }
-
-    .random-email-actions {
-      justify-content: flex-start;
-      flex-wrap: wrap;
     }
 
     .manual-email-form {
